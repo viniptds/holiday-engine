@@ -2,6 +2,7 @@ import { jest } from '@jest/globals';
 import { QueryRunner, getMetadataArgsStorage } from 'typeorm';
 import { CreateAiTables1760400000000 } from './1760400000000-create-ai-tables.js';
 import { AddAiMessageAttempts1760400100000 } from './1760400100000-add-ai-message-attempts.js';
+import { AddAiMessageReplyingUntil1760400200000 } from './1760400200000-add-ai-message-replying-until.js';
 import { migrations } from './index.js';
 import { AiConversation } from '../../ai/entities/ai-conversation.entity.js';
 import { AiMessage } from '../../ai/entities/ai-message.entity.js';
@@ -127,5 +128,18 @@ describe('AddAiMessageAttempts1760400100000', () => {
       'ALTER TABLE "ai_messages" DROP CONSTRAINT "CHK_ai_messages_attempts"',
       'ALTER TABLE "ai_messages" DROP COLUMN "attempts"',
     ]);
+  });
+});
+
+describe('AddAiMessageReplyingUntil1760400200000', () => {
+  it('runs right after the attempts migration', () => {
+    const names = migrations.map((m) => m.name);
+    expect(names.indexOf('AddAiMessageReplyingUntil1760400200000')).toBe(names.indexOf('AddAiMessageAttempts1760400100000') + 1);
+  });
+
+  it('adds a nullable replyingUntil and removes it again', async () => {
+    const migration = new AddAiMessageReplyingUntil1760400200000();
+    expect(await run('up', migration)).toEqual(['ALTER TABLE "ai_messages" ADD "replyingUntil" timestamptz']);
+    expect(await run('down', migration)).toEqual(['ALTER TABLE "ai_messages" DROP COLUMN "replyingUntil"']);
   });
 });

@@ -28,16 +28,42 @@ const PROFILE = { email: 'ana.private@example.com', displayName: 'Ana Secret-Sur
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
-/** The mock LLM, plus a script of failures to play first, recording every call. */
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
+/**
+ * The mock LLM, plus a script to play first, recording every call. `hold` blocks the call until
+ * `release()` (a barrier on the provider call); `held` resolves once it's blocked.
+ */
 class ScriptedLlm implements LlmProvider {
   readonly name = 'mock' as const;
   private readonly mock = new MockLlmProvider();
   calls: DraftTurnInput[] = [];
-  script: ('fail' | 'invalid')[] = [];
+  script: ('fail' | 'invalid' | 'hold')[] = [];
+  held = deferred();
+  private gate = deferred();
+
+  reset() {
+    this.calls = [];
+    this.script = [];
+    this.held = deferred();
+    this.gate = deferred();
+  }
+
+  release() {
+    this.gate.resolve();
+  }
 
   async draftTurn(input: DraftTurnInput): Promise<DraftTurnResult> {
     this.calls.push(input);
     const next = this.script.shift();
+    if (next === 'hold') {
+      this.held.resolve();
+      await this.gate.promise;
+    }
     if (next === 'fail') throw new AiUnavailableError('mock: down');
     if (next === 'invalid') return { json: { reply: 42 }, model: 'mock', inputTokens: 5, outputTokens: 1 };
     return this.mock.draftTurn(input);
@@ -92,8 +118,7 @@ describe('AI trip planning API (feature)', () => {
     for (const id of USERS) seedUser(db, id, id === AUTHOR ? PROFILE : {});
     db.afterRead = undefined;
     db.beforeWrite = undefined;
-    llm.calls = [];
-    llm.script = [];
+    llm.reset();
     logged.length = 0;
     for (const level of ['log', 'warn', 'error', 'debug', 'verbose'] as const) {
       jest.spyOn(Logger.prototype, level).mockImplementation((message: unknown) => {
@@ -102,7 +127,11 @@ describe('AI trip planning API (feature)', () => {
     }
   });
 
-  afterEach(() => jest.restoreAllMocks());
+  afterEach(() => {
+    // A failing double-submit spec must not leave a provider call blocked (the app couldn't close).
+    llm.release();
+    jest.restoreAllMocks();
+  });
 
   const call = (method: string, path: string, user: string | null, body?: unknown, headers: Record<string, string> = {}) =>
     fetch(`${baseUrl}${path}`, {
@@ -477,6 +506,99 @@ describe('AI trip planning API (feature)', () => {
 
       // A different message is a new turn.
       expect((await send(id, 'Dates: 2026-11-10 to 2026-11-14')).response.status).toBe(200);
+    });
+  });
+
+  describe('double submit (BUG-024)', () => {
+    const DATES = 'From 2026-11-10 to 2026-11-14';
+    const TURN_MARK_MS = 3 * 30_000 + 10_000;
+
+    it('answers a same-text double submit once: one 200, one 409, one provider call, one attempt', async () => {
+      const { body } = await start('A trip to Lisbon');
+      const id = body.conversation.id;
+      llm.reset();
+      llm.script = ['hold'];
+
+      const sends = [send(id, DATES), send(id, DATES)];
+      await llm.held.promise;
+
+      // While the first reply is being prepared, the second send is refused at once.
+      const refused = await Promise.race(sends);
+      expect(refused.response.status).toBe(409);
+      expect(refused.body).toEqual({ code: 'CONFLICT', message: 'A reply is already being prepared' });
+      const [pending] = db.all(AiMessage, { conversationId: id, text: DATES });
+      expect(pending.attempts).toBe(1);
+      const markMs = new Date(pending.replyingUntil!).getTime() - new Date(pending.createdAt).getTime();
+      expect(Math.abs(markMs - TURN_MARK_MS)).toBeLessThan(1000);
+
+      llm.release();
+      const results = await Promise.all(sends);
+
+      expect(results.map((r) => r.response.status).sort()).toEqual([200, 409]);
+      expect(llm.calls).toHaveLength(1);
+      expect(db.all(AiMessage, { conversationId: id, text: DATES })).toEqual([
+        expect.objectContaining({ attempts: 1, replyingUntil: null }),
+      ]);
+      expect(db.all(AiMessage, { conversationId: id, role: 'assistant' })).toHaveLength(2);
+    });
+
+    it('refuses the same text while a mark is live, without calling the provider or counting an attempt', async () => {
+      const conversation = seedConversation(AUTHOR);
+      db.seed(AiMessage, { conversationId: conversation.id, role: 'user', text: DATES, replyingUntil: new Date(Date.now() + 60_000) });
+
+      const { response } = await send(conversation.id, DATES);
+
+      expect(response.status).toBe(409);
+      expect(llm.calls).toHaveLength(0);
+      expect(db.all(AiMessage)).toEqual([expect.objectContaining({ attempts: 1 })]);
+    });
+
+    it('treats an expired mark (the process died mid-reply) as a failed turn: the same text retries', async () => {
+      const conversation = seedConversation(AUTHOR);
+      db.seed(AiMessage, {
+        conversationId: conversation.id,
+        role: 'user',
+        text: DATES,
+        createdAt: new Date(Date.now() - 5 * MINUTE),
+        replyingUntil: new Date(Date.now() - 1000),
+      });
+
+      const { response } = await send(conversation.id, DATES);
+
+      expect(response.status).toBe(200);
+      expect(llm.calls).toHaveLength(1);
+      expect(db.all(AiMessage, { role: 'user' })).toEqual([expect.objectContaining({ attempts: 2, replyingUntil: null })]);
+    });
+
+    it('clears the mark when the turn fails, so the same text is then a retry', async () => {
+      const { body } = await start('A trip to Lisbon');
+      const id = body.conversation.id;
+      llm.script = ['fail'];
+
+      expect((await send(id, DATES)).response.status).toBe(503);
+      expect(db.all(AiMessage, { conversationId: id, text: DATES })).toEqual([
+        expect.objectContaining({ attempts: 1, replyingUntil: null }),
+      ]);
+
+      expect((await send(id, DATES)).response.status).toBe(200);
+      expect(db.all(AiMessage, { conversationId: id, text: DATES })).toEqual([
+        expect.objectContaining({ attempts: 2, replyingUntil: null }),
+      ]);
+    });
+
+    it('marks and clears the first message of a conversation too', async () => {
+      llm.script = ['hold'];
+      const starting = call('POST', '/ai/conversations', AUTHOR, { message: 'A trip to Lisbon' });
+      await llm.held.promise;
+      const [first] = db.all(AiMessage);
+      expect(first.replyingUntil).toEqual(expect.any(Date));
+
+      const again = await send(first.conversationId, 'A trip to Lisbon');
+      expect(again.response.status).toBe(409);
+
+      llm.release();
+      expect((await starting).status).toBe(201);
+      expect(db.all(AiMessage, { role: 'user' })).toEqual([expect.objectContaining({ attempts: 1, replyingUntil: null })]);
     });
   });
 

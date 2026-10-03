@@ -32,8 +32,13 @@ const notOpen = (status: string) => new AppError('CONFLICT', `This plan is ${sta
 const aiUnavailable = () =>
   new AppError('AI_UNAVAILABLE', 'The trip planner is unavailable right now. Please try again in a moment.');
 
-/** Overall budget for one turn: per-call timeout × (1 + retries) × (1 + the max_tokens/invalid-output retry). */
-const TURN_BUDGET_FACTOR = 6;
+/**
+ * Overall budget for one turn's provider calls (retries included): 3 × AI_TIMEOUT_MS. The in-flight
+ * mark on the user message lasts that plus REPLY_MARK_GRACE_MS (places lookups, writes), so the
+ * call is aborted before the mark can expire.
+ */
+const TURN_BUDGET_FACTOR = 3;
+const REPLY_MARK_GRACE_MS = 10_000;
 
 /** A failed turn can be retried 3 times: 4 attempts in all. */
 export const MAX_TURN_ATTEMPTS = 4;
@@ -98,14 +103,21 @@ export class AiService {
         }),
       );
       const first = await manager.save(
-        manager.create(AiMessage, { conversationId: conversation.id, role: 'user', text: input.message, draft: null, attempts: 1 }),
+        manager.create(AiMessage, {
+          conversationId: conversation.id,
+          role: 'user',
+          text: input.message,
+          draft: null,
+          attempts: 1,
+          replyingUntil: this.replyMarkExpiry(),
+        }),
       );
       return { conversation, first };
     });
 
     let turn: AiTurnDto;
     try {
-      turn = await this.reply(conversation, locale, [first]);
+      turn = await this.answer(conversation, locale, [first]);
     } catch (error) {
       // The conversation exists: tell the app which one, so it can retry there.
       if (error instanceof AppError && error.code === 'AI_UNAVAILABLE') throw new FirstTurnUnavailableError(conversation.id);
@@ -116,9 +128,10 @@ export class AiService {
   }
 
   /**
-   * Adds a user message and returns the assistant's turn. Sending the same text again right after
-   * a failed turn retries it: no second row, but the attempt is counted on the message (and toward
-   * the rate limits), at most MAX_TURN_ATTEMPTS in all.
+   * Adds a user message and returns the assistant's turn. Sending the same text again while its
+   * reply is still being prepared is a double submit: CONFLICT, nothing counted. Sending it again
+   * after a failed turn (or after the in-flight mark expired) retries it: no second row, but the
+   * attempt is counted on the message (and toward the rate limits), at most MAX_TURN_ATTEMPTS in all.
    */
   async post(user: AuthUser, locale: Locale, conversationId: string, message: string): Promise<AiTurnDto> {
     const conversation = await this.requireConversation(user, conversationId);
@@ -130,14 +143,18 @@ export class AiService {
       const history = await manager.find(AiMessage, { where: { conversationId: conversation.id }, order: { createdAt: 'ASC' } });
       const last = history.at(-1);
       if (last?.role === 'user' && last.text === message) {
+        if (last.replyingUntil && new Date(last.replyingUntil).getTime() > Date.now()) {
+          throw new AppError('CONFLICT', 'A reply is already being prepared');
+        }
         if (last.attempts >= MAX_TURN_ATTEMPTS) {
           throw new AppError('CONFLICT', 'This message failed too many times; send a different message or start a new plan');
         }
         await this.checkRateLimit(manager, user.id);
         // The retry is counted at its own time: the row moves to now (it's the latest message anyway).
         const now = new Date();
-        await manager.update(AiMessage, { id: last.id }, { attempts: last.attempts + 1, createdAt: now });
-        Object.assign(last, { attempts: last.attempts + 1, createdAt: now });
+        const retry = { attempts: last.attempts + 1, createdAt: now, replyingUntil: this.replyMarkExpiry(now.getTime()) };
+        await manager.update(AiMessage, { id: last.id }, retry);
+        Object.assign(last, retry);
       } else {
         const sent = history.filter((m) => m.role === 'user').length;
         if (sent >= MAX_USER_MESSAGES_PER_CONVERSATION) {
@@ -146,7 +163,14 @@ export class AiService {
         await this.checkRateLimit(manager, user.id);
         history.push(
           await manager.save(
-            manager.create(AiMessage, { conversationId: conversation.id, role: 'user', text: message, draft: null, attempts: 1 }),
+            manager.create(AiMessage, {
+              conversationId: conversation.id,
+              role: 'user',
+              text: message,
+              draft: null,
+              attempts: 1,
+              replyingUntil: this.replyMarkExpiry(),
+            }),
           ),
         );
       }
@@ -154,7 +178,7 @@ export class AiService {
       await manager.update(AiConversation, { id: conversation.id }, { updatedAt: new Date() });
       return history;
     });
-    return this.reply(conversation, locale, history);
+    return this.answer(conversation, locale, history);
   }
 
   /** The user's conversations, most recently active first. */
@@ -335,6 +359,29 @@ export class AiService {
       throw new AppError('RATE_LIMITED', 'Too many messages to the trip planner. Please wait a little.', undefined, {
         retryAfterSeconds: (freeAt - now) / 1000,
       });
+    }
+  }
+
+  /** When an in-flight mark set now expires: the turn budget plus a grace period. */
+  private replyMarkExpiry(now = Date.now()): Date {
+    return new Date(now + this.config.timeoutMs * TURN_BUDGET_FACTOR + REPLY_MARK_GRACE_MS);
+  }
+
+  /**
+   * `reply` for the history's last message (a user message carrying the in-flight mark), clearing
+   * the mark however the turn ends: after a failure, the same text is a retry.
+   */
+  private async answer(conversation: AiConversation, locale: Locale, history: AiMessage[]): Promise<AiTurnDto> {
+    const pending = history.at(-1)!;
+    try {
+      return await this.reply(conversation, locale, history);
+    } finally {
+      try {
+        await this.messages.update({ id: pending.id }, { replyingUntil: null });
+      } catch (error) {
+        // The mark expires by itself; don't hide the turn's own result.
+        this.logger.warn(`AI conversation ${conversation.id}: couldn't clear the in-flight mark (${(error as Error).name})`);
+      }
     }
   }
 

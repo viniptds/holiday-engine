@@ -46,6 +46,11 @@ export class AiMessage {
   @Column({ type: 'smallint', default: 1 })
   attempts: number;
 
+  // User messages: set while the provider call for this message runs (expires by itself if the process
+  // dies). Until then, the same text again is a double submit, not a retry of a failed turn.
+  @Column({ type: 'timestamptz', nullable: true })
+  replyingUntil: Date | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 }

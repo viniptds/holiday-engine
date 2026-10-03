@@ -29,6 +29,7 @@ export function aiDb(): InMemoryDb {
         inputTokens: null,
         outputTokens: null,
         attempts: 1,
+        replyingUntil: null,
       }),
       relations: { conversation: { entity: AiConversation, column: 'conversationId' } },
     })
