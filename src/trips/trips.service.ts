@@ -6,8 +6,10 @@ import { CreateTripDto } from './dto/create-trip.dto.js';
 import { UpdateTripDto } from './dto/update-trip.dto.js';
 import { TripNotFoundError, TripValidationError } from './trips.errors.js';
 import { TripOwner } from './trips.types.js';
+import { daysBetween, MAX_TRIP_DAYS } from './dto/date-rules.js';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// v4, like the ids `gen_random_uuid()` produces.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * Trip persistence. Every chat-facing method is scoped by owner (provider + chatId);
@@ -53,6 +55,9 @@ export class TripsService {
     if (data.notes !== undefined) trip.notes = data.notes;
     if (trip.endDate < trip.startDate) {
       throw new TripValidationError('endDate must be on or after startDate');
+    }
+    if (daysBetween(trip.startDate, trip.endDate) > MAX_TRIP_DAYS) {
+      throw new TripValidationError(`endDate must be at most ${MAX_TRIP_DAYS} days after startDate`);
     }
     return this.trips.save(trip);
   }

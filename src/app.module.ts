@@ -2,9 +2,12 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller.js';
 import { MessagesModule } from './messages/messages.module.js';
 import { TripsModule } from './trips/trips.module.js';
+import { EventsModule } from './events/events.module.js';
+import { SuggestionsModule } from './suggestions/suggestions.module.js';
 import { databaseConfig } from './database/database.config.js';
 
 @Module({
@@ -23,8 +26,11 @@ import { databaseConfig } from './database/database.config.js';
       inject: [ConfigService],
       useFactory: databaseConfig,
     }),
+    ScheduleModule.forRoot(),
     MessagesModule,
     TripsModule,
+    EventsModule,
+    SuggestionsModule,
   ],
   controllers: [AppController],
 })

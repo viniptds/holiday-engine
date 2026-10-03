@@ -57,36 +57,48 @@ function seededRandom(seed: number): () => number {
   };
 }
 
+/** Trimmed, single-spaced, title case ("  são   paulo" -> "São Paulo"), so casing never changes the events. */
+export function normalizeCity(city: string): string {
+  return city
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .replace(/(^|[\s-])(\p{L})/gu, (_, separator: string, letter: string) => separator + letter.toUpperCase());
+}
+
 function slug(text: string): string {
   const ascii = text.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
   return ascii.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'city';
 }
 
 /**
- * Deterministic fake events. Each (city, day) pair always yields the same events, so
- * overlapping ranges agree and `externalId`s stay stable for dedupe.
+ * Deterministic fake events. Each (normalized city, day) pair always yields the same events,
+ * so overlapping ranges agree and `externalId`s stay stable for dedupe.
  */
 export class MockEventsProvider implements EventsProvider {
   async search({ city, from, to, limit }: EventsSearch): Promise<Event[]> {
     if (limit <= 0 || from > to) return [];
 
     const events: Event[] = [];
-    for (let day = startOfUtcDay(from); day <= to; day = addUtcDays(day, 1)) {
-      events.push(...this.eventsForDay(city.trim(), day));
+    // Days are visited in order and every event falls on its own day, so once `limit`
+    // events are collected no later day can sort before them. This keeps long ranges cheap.
+    for (let day = startOfUtcDay(from); day <= to && events.length < limit; day = addUtcDays(day, 1)) {
+      events.push(
+        ...this.eventsForDay(normalizeCity(city), day).filter((event) => {
+          const startsAt = new Date(event.startsAt);
+          return startsAt >= from && startsAt <= to;
+        }),
+      );
     }
 
     return events
-      .filter((event) => {
-        const startsAt = new Date(event.startsAt);
-        return startsAt >= from && startsAt <= to;
-      })
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt) || a.externalId.localeCompare(b.externalId))
       .slice(0, limit);
   }
 
   private eventsForDay(city: string, day: Date): Event[] {
     const date = formatDateOnly(day);
-    const random = seededRandom(hash(`${city.toLowerCase()}|${date}`));
+    const random = seededRandom(hash(`${city}|${date}`));
     const pick = <T>(items: T[]): T => items[Math.floor(random() * items.length)];
 
     return Array.from({ length: EVENTS_PER_DAY }, (_, index) => {

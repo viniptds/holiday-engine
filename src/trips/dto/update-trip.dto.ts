@@ -1,29 +1,35 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, ValidateIf } from 'class-validator';
 import { IsDateOnly } from './is-date-only.validator.js';
+import { Trim } from './trim.transform.js';
 import { IsOnOrAfter } from './is-on-or-after.validator.js';
+import { MAX_TRIP_DAYS } from './date-rules.js';
+
+// Like @IsOptional(), but only for an omitted field: `null` is still validated (and rejected).
+const IfPresent = () => ValidateIf((_, value) => value !== undefined);
 
 /**
- * `trip.update` payload. Omitted fields are left unchanged; `notes: null` clears notes.
- * `endDate >= startDate` is checked here when both are sent, and against the stored
- * trip by `TripsService.update` when only one is sent.
+ * `trip.update` payload. Omitted fields are left unchanged; `notes: null` clears notes,
+ * `null` for any other field is invalid. Date order and the trip length cap are checked
+ * here when both dates are sent, and against the stored trip by `TripsService.update`.
  */
 export class UpdateTripDto {
-  @IsUUID()
+  @IsUUID('4')
   tripId: string;
 
-  @IsOptional()
+  @IfPresent()
+  @Trim()
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
   destination?: string;
 
-  @IsOptional()
+  @IfPresent()
   @IsDateOnly()
   startDate?: string;
 
-  @IsOptional()
+  @IfPresent()
   @IsDateOnly()
-  @IsOnOrAfter('startDate')
+  @IsOnOrAfter('startDate', { maxDays: MAX_TRIP_DAYS })
   endDate?: string;
 
   @IsOptional()

@@ -1,4 +1,4 @@
-import { MockEventsProvider } from './mock-events.provider.js';
+import { MockEventsProvider, normalizeCity } from './mock-events.provider.js';
 
 const from = new Date('2026-11-01T00:00:00.000Z');
 const to = new Date('2026-11-05T23:59:59.999Z');
@@ -68,5 +68,22 @@ describe('MockEventsProvider', () => {
 
   it('returns nothing for an empty range', async () => {
     expect(await provider.search({ city: 'Lisbon', from: to, to: from, limit: 5 })).toEqual([]);
+  });
+
+  // BUG-010: casing and spacing never change the events, ids or displayed city.
+  it('normalizes the city for both the seed and the display', async () => {
+    const a = await provider.search({ city: 'Lisbon', from, to, limit: 50 });
+    const b = await provider.search({ city: '  lISBON ', from, to, limit: 50 });
+
+    expect(b).toEqual(a);
+    expect(a.every((e) => e.city === 'Lisbon' && e.name.endsWith(' in Lisbon'))).toBe(true);
+  });
+
+  it.each([
+    ['são paulo', 'São Paulo'],
+    ['  RIO   DE janeiro ', 'Rio De Janeiro'],
+    ['saint-étienne', 'Saint-Étienne'],
+  ])('normalizeCity(%p) is %p', (input, expected) => {
+    expect(normalizeCity(input)).toBe(expected);
   });
 });

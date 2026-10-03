@@ -18,7 +18,8 @@ export function addUtcDays(date: Date, days: number): Date {
 /** Parses a `YYYY-MM-DD` string as midnight UTC. */
 export function parseDateOnly(value: string): Date {
   const date = new Date(`${value}T00:00:00.000Z`);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(date.getTime())) {
+  // The round trip rejects impossible days, which Date would roll over (2026-02-30 -> 2026-03-02).
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(date.getTime()) || formatDateOnly(date) !== value) {
     throw new Error(`Invalid date "${value}", expected YYYY-MM-DD`);
   }
   return date;

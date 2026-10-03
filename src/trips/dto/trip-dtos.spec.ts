@@ -79,3 +79,103 @@ describe('TripIdDto', () => {
     expect(await failedProps(TripIdDto, {})).toEqual(['tripId']);
   });
 });
+
+describe('CreateTripDto edge cases', () => {
+  const valid = { destination: 'Lisbon', startDate: '2026-11-01', endDate: '2026-11-05' };
+
+  it('accepts leap days only in leap years', async () => {
+    expect(await failedProps(CreateTripDto, { ...valid, startDate: '2028-02-29', endDate: '2028-03-01' })).toEqual([]);
+    expect(await failedProps(CreateTripDto, { ...valid, startDate: '2027-02-29', endDate: '2027-03-01' })).toEqual([
+      'startDate',
+    ]);
+  });
+
+  it('accepts trips spanning a year boundary', async () => {
+    expect(await failedProps(CreateTripDto, { ...valid, startDate: '2026-12-30', endDate: '2027-01-02' })).toEqual([]);
+  });
+
+  it('rejects non-string field types', async () => {
+    expect(await failedProps(CreateTripDto, { ...valid, destination: 42 })).toEqual(['destination']);
+    expect(await failedProps(CreateTripDto, { ...valid, startDate: 20261101 })).toEqual(['startDate']);
+    expect(await failedProps(CreateTripDto, { ...valid, notes: 5 })).toEqual(['notes']);
+  });
+
+  it('accepts notes: null', async () => {
+    expect(await failedProps(CreateTripDto, { ...valid, notes: null })).toEqual([]);
+  });
+
+  it('counts length in characters, not bytes', async () => {
+    expect(await failedProps(CreateTripDto, { ...valid, destination: 'São Paulo'.padEnd(100, 'ã') })).toEqual([]);
+  });
+
+  // Regression for BUG-004 (whitespace-only destinations used to pass @IsNotEmpty).
+  it('rejects a whitespace-only destination', async () => {
+    expect(await failedProps(CreateTripDto, { ...valid, destination: '   ' })).toEqual(['destination']);
+    expect(await failedProps(UpdateTripDto, { tripId: TRIP_ID, destination: ' \t ' })).toEqual(['destination']);
+  });
+
+  it('trims the destination that gets stored', () => {
+    expect(plainToInstance(CreateTripDto, { ...valid, destination: '  Lisbon ' }).destination).toBe('Lisbon');
+  });
+});
+
+describe('UpdateTripDto edge cases', () => {
+  it('accepts an update with only tripId (no-op)', async () => {
+    expect(await failedProps(UpdateTripDto, { tripId: TRIP_ID })).toEqual([]);
+  });
+
+  it('accepts equal start and end dates', async () => {
+    expect(
+      await failedProps(UpdateTripDto, { tripId: TRIP_ID, startDate: '2026-11-05', endDate: '2026-11-05' }),
+    ).toEqual([]);
+  });
+
+  it('rejects impossible calendar dates', async () => {
+    expect(await failedProps(UpdateTripDto, { tripId: TRIP_ID, endDate: '2026-04-31' })).toEqual(['endDate']);
+  });
+
+  // BUG-003 (fixed): @IsOptional() also skipped validation for null, so null reached NOT NULL columns.
+  it.each(['destination', 'startDate', 'endDate'])('rejects %s: null', async (field) => {
+    expect(await failedProps(UpdateTripDto, { tripId: TRIP_ID, [field]: null })).toEqual([field]);
+  });
+});
+
+describe('contract rules added with Task D', () => {
+  const valid = { destination: 'Lisbon', startDate: '2026-11-01', endDate: '2026-11-05' };
+
+  // BUG-005: a malformed startDate is reported once, without a spurious endDate error.
+  it('reports only the malformed date, not the date order', async () => {
+    expect(
+      await failedProps(UpdateTripDto, { tripId: TRIP_ID, startDate: 'tomorrow', endDate: '2026-11-01' }),
+    ).toEqual(['startDate']);
+    expect(await failedProps(CreateTripDto, { ...valid, startDate: '2026-02-30' })).toEqual(['startDate']);
+  });
+
+  // BUG-006: tripId must be a v4 UUID.
+  it.each(['00000000-0000-0000-0000-000000000000', '0b4f8c1e-3c2a-1f7e-9d1a-2b3c4d5e6f70'])(
+    'rejects the non-v4 tripId %s',
+    async (tripId) => {
+      expect(await failedProps(TripIdDto, { tripId })).toEqual(['tripId']);
+      expect(await failedProps(UpdateTripDto, { tripId })).toEqual(['tripId']);
+    },
+  );
+
+  // BUG-008: a trip may last at most 365 days.
+  it('caps the trip length at 365 days', async () => {
+    expect(await failedProps(CreateTripDto, { ...valid, startDate: '2026-01-01', endDate: '2027-01-01' })).toEqual([]);
+    expect(await failedProps(CreateTripDto, { ...valid, startDate: '2026-01-01', endDate: '2027-01-02' })).toEqual([
+      'endDate',
+    ]);
+    expect(
+      await failedProps(UpdateTripDto, { tripId: TRIP_ID, startDate: '2026-11-01', endDate: '9999-12-31' }),
+    ).toEqual(['endDate']);
+  });
+
+  it('explains which date rule failed', async () => {
+    const [tooLong] = await validate(plainToInstance(CreateTripDto, { ...valid, endDate: '2028-01-01' }));
+    const [reversed] = await validate(plainToInstance(CreateTripDto, { ...valid, endDate: '2026-10-01' }));
+
+    expect(Object.values(tooLong.constraints!)).toEqual(['endDate must be at most 365 days after startDate']);
+    expect(Object.values(reversed.constraints!)).toEqual(['endDate must be on or after startDate']);
+  });
+});
