@@ -22,8 +22,11 @@ async function run(
 describe('security-fix migrations', () => {
   it('run after AddUserForeignKeys, in order', () => {
     const names = migrations.map((m) => m.name);
+    const at = names.indexOf('AddUserForeignKeys1760190000000');
 
-    expect(names.slice(-3)).toEqual([
+    // Right after AddUserForeignKeys, in order (later features' migrations may follow).
+    expect(at).toBeGreaterThan(-1);
+    expect(names.slice(at, at + 3)).toEqual([
       'AddUserForeignKeys1760190000000',
       'CreateTripRemovals1760200000000',
       'OneOwnerPerTrip1760200100000',

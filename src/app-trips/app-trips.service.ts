@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { AppError } from '../app-common/app-error.js';
 import type { Locale } from '../app-common/locale.js';
 import { USER_DIRECTORY } from '../app-common/auth-user.js';
@@ -42,8 +42,17 @@ export class AppTripsService {
     return this.present(memberships, locale);
   }
 
-  /** Creates the trip and the caller's owner membership in one transaction. */
-  async create(user: AuthUser, data: CreateAppTripDto, locale: Locale): Promise<AppTripDto> {
+  /**
+   * Creates the trip and the caller's owner membership in one transaction, and returns it in
+   * `locale`. `inTransaction` runs inside it with the new trip, for callers that save related rows
+   * atomically (AI confirm).
+   */
+  async create(
+    user: AuthUser,
+    data: CreateAppTripDto,
+    locale: Locale,
+    inTransaction?: (manager: EntityManager, trip: Trip) => Promise<void>,
+  ): Promise<AppTripDto> {
     const travelerProfile = this.toTravelerProfile(data.travelerProfile);
     const membership = await this.trips.manager.transaction(async (manager) => {
       const trip = await manager.save(
@@ -63,6 +72,7 @@ export class AppTripsService {
       );
       const member = await manager.save(manager.create(TripMember, { tripId: trip.id, userId: user.id, role: 'owner' }));
       member.trip = trip;
+      await inTransaction?.(manager, trip);
       return member;
     });
     const [dto] = await this.present([membership], locale);

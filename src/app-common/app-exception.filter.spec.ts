@@ -34,6 +34,13 @@ describe('toAppErrorBody', () => {
     });
   });
 
+  it('maps AI_UNAVAILABLE to 503', () => {
+    expect(toAppErrorBody(new AppError('AI_UNAVAILABLE', 'Try again later'))).toEqual({
+      status: 503,
+      body: { code: 'AI_UNAVAILABLE', message: 'Try again later' },
+    });
+  });
+
   it('adds Retry-After in whole seconds (at least 1)', () => {
     expect(toAppErrorBody(new AppError('RATE_LIMITED', 'Slow down', undefined, { retryAfterSeconds: 89.2 })).headers).toEqual({
       'Retry-After': '90',

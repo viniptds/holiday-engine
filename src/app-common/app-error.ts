@@ -8,6 +8,7 @@ export type AppErrorCode =
   | 'NOT_FOUND'
   | 'CONFLICT'
   | 'RATE_LIMITED'
+  | 'AI_UNAVAILABLE'
   | 'INTERNAL';
 
 export const APP_ERROR_STATUS: Record<AppErrorCode, HttpStatus> = {
@@ -17,6 +18,7 @@ export const APP_ERROR_STATUS: Record<AppErrorCode, HttpStatus> = {
   NOT_FOUND: HttpStatus.NOT_FOUND,
   CONFLICT: HttpStatus.CONFLICT,
   RATE_LIMITED: HttpStatus.TOO_MANY_REQUESTS,
+  AI_UNAVAILABLE: HttpStatus.SERVICE_UNAVAILABLE,
   INTERNAL: HttpStatus.INTERNAL_SERVER_ERROR,
 };
 

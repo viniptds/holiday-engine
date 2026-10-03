@@ -7,6 +7,8 @@ import { CreateTripInvites1760186400000 } from './1760186400000-create-trip-invi
 import { AddUserForeignKeys1760190000000 } from './1760190000000-add-user-foreign-keys.js';
 import { CreateTripRemovals1760200000000 } from './1760200000000-create-trip-removals.js';
 import { OneOwnerPerTrip1760200100000 } from './1760200100000-one-owner-per-trip.js';
+import { CreateAiTables1760400000000 } from './1760400000000-create-ai-tables.js';
+import { AddAiMessageAttempts1760400100000 } from './1760400100000-add-ai-message-attempts.js';
 
 // Register every migration here, in order.
 export const migrations = [
@@ -19,4 +21,6 @@ export const migrations = [
   AddUserForeignKeys1760190000000,
   CreateTripRemovals1760200000000,
   OneOwnerPerTrip1760200100000,
+  CreateAiTables1760400000000,
+  AddAiMessageAttempts1760400100000,
 ];
