@@ -29,8 +29,8 @@ export const TEST_QUESTIONS: LocalizedQuestionSet = {
     },
   ],
   personas: {
-    relaxer: localized('Easygoing Wanderer', 'Viajante tranquilo', 'Viajero relajado'),
-    foodie: localized('Taste Hunter', 'Caçador de sabores', 'Cazador de sabores'),
-    adventurer: localized('Trail Seeker', 'Desbravador de trilhas', 'Buscador de senderos'),
+    relaxer: localized('Easygoing Wanderer', 'Espírito tranquilo', 'Espíritu tranquilo'),
+    foodie: localized('Taste Hunter', 'Paladar aventureiro', 'Paladar aventurero'),
+    adventurer: localized('Trail Seeker', 'Pé na trilha', 'Alma senderista'),
   },
 };

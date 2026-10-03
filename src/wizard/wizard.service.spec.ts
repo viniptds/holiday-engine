@@ -32,10 +32,10 @@ const SET: LocalizedQuestionSet = {
   ],
   // Order matters: ties go to the first listed.
   personas: {
-    explorer: localized('Curious Explorer', 'Explorador curioso', 'Explorador curioso'),
-    relaxer: localized('Easygoing Wanderer', 'Viajante tranquilo', 'Viajero relajado'),
-    foodie: localized('Taste Hunter', 'Caçador de sabores', 'Cazador de sabores'),
-    adventurer: localized('Trail Seeker', 'Desbravador de trilhas', 'Buscador de senderos'),
+    explorer: localized('Curious Explorer', 'Curiosidade sem fim', 'Curiosidad sin fin'),
+    relaxer: localized('Easygoing Wanderer', 'Espírito tranquilo', 'Espíritu tranquilo'),
+    foodie: localized('Taste Hunter', 'Paladar aventureiro', 'Paladar aventurero'),
+    adventurer: localized('Trail Seeker', 'Pé na trilha', 'Alma senderista'),
   },
 };
 
@@ -147,8 +147,8 @@ describe('WizardService.getQuestionSet', () => {
 
   it.each([
     ['en', 'Pace?', 'Slow', 'Taste Hunter'],
-    ['pt-BR', 'Pace? (pt-BR)', 'Slow (pt-BR)', 'Caçador de sabores'],
-    ['es', 'Pace? (es)', 'Slow (es)', 'Cazador de sabores'],
+    ['pt-BR', 'Pace? (pt-BR)', 'Slow (pt-BR)', 'Paladar aventureiro'],
+    ['es', 'Pace? (es)', 'Slow (es)', 'Paladar aventurero'],
   ] as const)('resolves every text to %s', (locale, title, label, foodie) => {
     const set = wizard.getQuestionSet(locale);
 
@@ -179,8 +179,8 @@ describe('WizardService.presentProfile / normalizeProfile', () => {
   const profile = (persona: string | null) => ({ questionSetVersion: 3, answers: { pace: ['slow'] }, persona });
 
   it('returns the persona label in the locale, for a key or a legacy label', () => {
-    expect(wizard.presentProfile(profile('relaxer'), 'es')).toEqual(profile('Viajero relajado'));
-    expect(wizard.presentProfile(profile('Easygoing Wanderer'), 'pt-BR')).toEqual(profile('Viajante tranquilo'));
+    expect(wizard.presentProfile(profile('relaxer'), 'es')).toEqual(profile('Espíritu tranquilo'));
+    expect(wizard.presentProfile(profile('Easygoing Wanderer'), 'pt-BR')).toEqual(profile('Espírito tranquilo'));
     expect(wizard.presentProfile(profile(null), 'es')).toEqual(profile(null));
     expect(wizard.presentProfile(profile('Someone Else'), 'en')).toEqual(profile(null));
     expect(wizard.presentProfile(null, 'en')).toBeNull();
@@ -199,15 +199,15 @@ describe('personaKey / personaLabel', () => {
   it('maps a key or a label in any locale to the key', () => {
     expect(personaKey(SET, 'foodie')).toBe('foodie');
     expect(personaKey(SET, 'Taste Hunter')).toBe('foodie');
-    expect(personaKey(SET, 'Caçador de sabores')).toBe('foodie');
-    expect(personaKey(SET, 'Explorador curioso')).toBe('explorer');
+    expect(personaKey(SET, 'Paladar aventureiro')).toBe('foodie');
+    expect(personaKey(SET, 'Curiosidad sin fin')).toBe('explorer');
     expect(personaKey(SET, 'taste hunter')).toBeNull();
     expect(personaKey(SET, 'constructor')).toBeNull();
   });
 
   it('gives the label in the locale, or null for null and unknown values', () => {
-    expect(personaLabel(SET, 'Taste Hunter', 'es')).toBe('Cazador de sabores');
-    expect(personaLabel(SET, 'adventurer', 'pt-BR')).toBe('Desbravador de trilhas');
+    expect(personaLabel(SET, 'Taste Hunter', 'es')).toBe('Paladar aventurero');
+    expect(personaLabel(SET, 'adventurer', 'pt-BR')).toBe('Pé na trilha');
     expect(personaLabel(SET, null, 'en')).toBeNull();
     expect(personaLabel(SET, 'Unknown', 'en')).toBeNull();
   });

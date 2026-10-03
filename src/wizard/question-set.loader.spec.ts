@@ -146,10 +146,10 @@ describe('loadQuestionSet', () => {
       ['budget', 'single', undefined, ['saver', 'comfort', 'treat']],
     ]);
     expect(set.personas).toEqual({
-      relaxer: { en: 'Easygoing Wanderer', 'pt-BR': 'Viajante tranquilo', es: 'Viajero relajado' },
-      explorer: { en: 'Curious Explorer', 'pt-BR': 'Explorador curioso', es: 'Explorador curioso' },
-      foodie: { en: 'Taste Hunter', 'pt-BR': 'Caçador de sabores', es: 'Cazador de sabores' },
-      adventurer: { en: 'Trail Seeker', 'pt-BR': 'Desbravador de trilhas', es: 'Buscador de senderos' },
+      relaxer: { en: 'Easygoing Wanderer', 'pt-BR': 'Espírito tranquilo', es: 'Espíritu tranquilo' },
+      explorer: { en: 'Curious Explorer', 'pt-BR': 'Curiosidade sem fim', es: 'Curiosidad sin fin' },
+      foodie: { en: 'Taste Hunter', 'pt-BR': 'Paladar aventureiro', es: 'Paladar aventurero' },
+      adventurer: { en: 'Trail Seeker', 'pt-BR': 'Pé na trilha', es: 'Alma senderista' },
     });
   });
 

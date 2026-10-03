@@ -318,18 +318,18 @@ describe('App trips API (feature)', () => {
 
       expect(res.status).toBe(201);
       const trip = (await res.json()) as AppTripDto;
-      expect(trip.travelerProfile).toEqual({ questionSetVersion: 1, answers: { pace: ['packed'] }, persona: 'Buscador de senderos' });
+      expect(trip.travelerProfile).toEqual({ questionSetVersion: 1, answers: { pace: ['packed'] }, persona: 'Alma senderista' });
       expect(db.trips.get(trip.id)?.travelerProfile?.persona).toBe('adventurer');
     });
 
     it.each([
       [undefined, 'Easygoing Wanderer'],
       ['en-US', 'Easygoing Wanderer'],
-      ['pt-BR', 'Viajante tranquilo'],
-      ['pt-PT', 'Viajante tranquilo'],
-      ['es', 'Viajero relajado'],
+      ['pt-BR', 'Espírito tranquilo'],
+      ['pt-PT', 'Espírito tranquilo'],
+      ['es', 'Espíritu tranquilo'],
       ['fr-FR', 'Easygoing Wanderer'],
-      ['fr;q=1, es;q=0.5', 'Viajero relajado'],
+      ['fr;q=1, es;q=0.5', 'Espíritu tranquilo'],
     ])('follows Accept-Language %p on every Trip response', async (language, label) => {
       const id = db.seed(OWNER, [[EDITOR, 'editor']], { travelerProfile: profile('relaxer') });
 
@@ -342,12 +342,12 @@ describe('App trips API (feature)', () => {
     it('maps a row holding the old English label back to its key, in the request language', async () => {
       const id = db.seed(OWNER, [], { travelerProfile: profile('Taste Hunter') });
 
-      expect(await personaOf(await call('GET', `/trips/${id}`, OWNER, undefined, 'pt-BR'))).toBe('Caçador de sabores');
+      expect(await personaOf(await call('GET', `/trips/${id}`, OWNER, undefined, 'pt-BR'))).toBe('Paladar aventureiro');
       expect(await personaOf(await call('GET', `/trips/${id}`, OWNER, undefined, 'en'))).toBe('Taste Hunter');
       expect(db.trips.get(id)?.travelerProfile?.persona).toBe('Taste Hunter'); // reads don't write
 
       // Any save rewrites it to the key.
-      expect(await personaOf(await call('PATCH', `/trips/${id}`, OWNER, { notes: 'x' }, 'es'))).toBe('Cazador de sabores');
+      expect(await personaOf(await call('PATCH', `/trips/${id}`, OWNER, { notes: 'x' }, 'es'))).toBe('Paladar aventurero');
       expect(db.trips.get(id)?.travelerProfile?.persona).toBe('foodie');
     });
 

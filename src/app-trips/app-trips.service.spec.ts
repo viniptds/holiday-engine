@@ -164,7 +164,7 @@ describe('AppTripsService', () => {
       const dto = await service.create(ME, { ...data, travelerProfile }, 'pt-BR');
 
       expect(manager.save.mock.calls[0][0]).toMatchObject({ travelerProfile: { ...travelerProfile, persona: 'adventurer' } });
-      expect(dto.travelerProfile).toEqual({ ...travelerProfile, persona: 'Desbravador de trilhas' });
+      expect(dto.travelerProfile).toEqual({ ...travelerProfile, persona: 'Pé na trilha' });
     });
 
     it('rejects a profile that does not match the question set, before any write', async () => {
@@ -315,11 +315,11 @@ describe('AppTripsService', () => {
 
     it.each([
       ['en', 'relaxer', 'Easygoing Wanderer'],
-      ['pt-BR', 'relaxer', 'Viajante tranquilo'],
-      ['es', 'relaxer', 'Viajero relajado'],
+      ['pt-BR', 'relaxer', 'Espírito tranquilo'],
+      ['es', 'relaxer', 'Espíritu tranquilo'],
       // Rows saved before keys were stored hold the English label; it maps back to its key.
-      ['pt-BR', 'Easygoing Wanderer', 'Viajante tranquilo'],
-      ['es', 'Taste Hunter', 'Cazador de sabores'],
+      ['pt-BR', 'Easygoing Wanderer', 'Espírito tranquilo'],
+      ['es', 'Taste Hunter', 'Paladar aventurero'],
       ['en', 'Trail Seeker', 'Trail Seeker'],
       // Unknown values (e.g. a persona since removed) come back as null.
       ['en', 'Retired Persona', null],
@@ -393,7 +393,7 @@ describe('AppTripsService', () => {
       given(membershipOf('owner', makeTrip({ travelerProfile })));
 
       await expect(service.update(ME, TRIP_ID, { notes: 'x' }, 'es')).resolves.toMatchObject({
-        travelerProfile: { ...travelerProfile, persona: 'Viajero relajado' },
+        travelerProfile: { ...travelerProfile, persona: 'Espíritu tranquilo' },
       });
       expect(trips.save.mock.calls[0][0].travelerProfile).toEqual(travelerProfile);
     });
@@ -405,7 +405,7 @@ describe('AppTripsService', () => {
       const dto = await service.update(ME, TRIP_ID, { notes: 'x' }, 'pt-BR');
 
       expect(trips.save.mock.calls[0][0].travelerProfile).toEqual({ ...legacy, persona: 'relaxer' });
-      expect(dto.travelerProfile).toEqual({ ...legacy, persona: 'Viajante tranquilo' });
+      expect(dto.travelerProfile).toEqual({ ...legacy, persona: 'Espírito tranquilo' });
     });
 
     it('keeps an unknown stored persona on save but returns it as null', async () => {

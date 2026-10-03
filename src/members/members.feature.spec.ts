@@ -837,9 +837,9 @@ describe('Members and invites API (feature)', () => {
     });
 
     it.each([
-      ['relaxer', 'pt-BR', 'Viajante tranquilo'],
+      ['relaxer', 'pt-BR', 'Espírito tranquilo'],
       // A row saved before persona keys holds the English label.
-      ['Easygoing Wanderer', 'es-419', 'Viajero relajado'],
+      ['Easygoing Wanderer', 'es-419', 'Espíritu tranquilo'],
       ['foodie', 'fr', 'Taste Hunter'],
     ])('returns the persona stored as %p in Accept-Language %p', async (persona, language, label) => {
       const travelerProfile = { questionSetVersion: 1, answers: {}, persona };
