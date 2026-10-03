@@ -36,7 +36,7 @@ export function aiDb(): InMemoryDb {
     .define(TripPlace, {
       primary: ['id'],
       unique: [['tripId', 'googlePlaceId']],
-      generate: () => ({ id: randomUUID(), createdAt: new Date() }),
+      generate: () => ({ id: randomUUID(), createdAt: new Date(), position: 0, startTime: null, notes: null }),
       relations: { trip: { entity: Trip, column: 'tripId' } },
     });
 }

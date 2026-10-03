@@ -96,6 +96,28 @@ describe('AnthropicProvider', () => {
     });
   });
 
+  it('sends anthropic-workspace-id when a workspace id is set, and never logs it', async () => {
+    const logs = (['log', 'warn', 'error', 'debug', 'verbose'] as const).map((level) =>
+      jest.spyOn(Logger.prototype, level).mockImplementation(() => undefined),
+    );
+    const { instance, fetch } = provider([json(400, { type: 'error', error: { type: 'invalid_request_error', message: 'x' } })], {
+      workspaceId: 'wrkspc_01SECRETID',
+    });
+
+    await expect(instance.draftTurn(INPUT)).rejects.toBeInstanceOf(AiUnavailableError);
+
+    expect(sentHeaders(fetch)['anthropic-workspace-id']).toBe('wrkspc_01SECRETID');
+    expect(JSON.stringify(logs.map((spy) => spy.mock.calls))).not.toContain('wrkspc_01SECRETID');
+  });
+
+  it.each([undefined, null, ''])('sends no anthropic-workspace-id when it is %p', async (workspaceId) => {
+    const { instance, fetch } = provider([json(200, message())], { workspaceId });
+
+    await instance.draftTurn(INPUT);
+
+    expect(sentHeaders(fetch)).not.toHaveProperty('anthropic-workspace-id');
+  });
+
   it('can leave out effort (models without it) and switch fallbacks off, header included', async () => {
     const { instance, fetch } = provider([json(200, message())], { effort: null, fallbacks: 'off', model: 'claude-haiku-4-5' });
 

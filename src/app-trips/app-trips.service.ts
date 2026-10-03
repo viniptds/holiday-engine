@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { EntityManager, In, Repository } from 'typeorm';
@@ -9,6 +9,7 @@ import type { AuthUser, UserDirectory } from '../app-common/auth-user.js';
 import { Trip } from '../trips/trip.entity.js';
 import { daysBetween, MAX_TRIP_DAYS } from '../trips/dto/date-rules.js';
 import { TripMember } from './trip-member.entity.js';
+import { TripScheduleHooks } from './trip-schedule-hooks.js';
 import { AppTripDto, TravelerProfile, TripRole } from './app-trips.types.js';
 import { WizardService } from '../wizard/wizard.service.js';
 import { CreateAppTripDto } from './dto/create-app-trip.dto.js';
@@ -30,6 +31,7 @@ export class AppTripsService {
     @InjectRepository(TripMember) private readonly members: Repository<TripMember>,
     @Inject(USER_DIRECTORY) private readonly users: UserDirectory,
     private readonly wizard: WizardService,
+    @Optional() private readonly scheduleHooks?: TripScheduleHooks,
   ) {}
 
   /** Trips the user is a member of, by startDate ascending. */
@@ -88,6 +90,7 @@ export class AppTripsService {
   async update(user: AuthUser, tripId: string, data: UpdateAppTripDto, locale: Locale): Promise<AppTripDto> {
     const membership = await this.requireMembership(user, tripId, ['owner', 'editor']);
     const trip = membership.trip!;
+    const before = { startDate: trip.startDate, endDate: trip.endDate };
     if (data.destination !== undefined) trip.destination = data.destination;
     if (data.startDate !== undefined) trip.startDate = data.startDate;
     if (data.endDate !== undefined) trip.endDate = data.endDate;
@@ -112,7 +115,21 @@ export class AppTripsService {
       });
     }
 
-    membership.trip = await this.trips.save(trip);
+    // The itinerary version only changes under the trip row lock (ItineraryService); this trip was
+    // loaded without it, so its value may be stale and must not be written back.
+    (trip as Partial<Trip>).itineraryVersion = undefined;
+    const datesChanged = trip.startDate !== before.startDate || trip.endDate !== before.endDate;
+    if (datesChanged && this.scheduleHooks?.any) {
+      // Days that no longer exist lose their places (to Unplanned) in the same transaction.
+      membership.trip = await this.trips.manager.transaction(async (manager) => {
+        await manager.findOne(Trip, { where: { id: trip.id }, lock: { mode: 'pessimistic_write' } });
+        const saved = await manager.save(trip);
+        await this.scheduleHooks!.datesChanged(manager, saved);
+        return saved;
+      });
+    } else {
+      membership.trip = await this.trips.save(trip);
+    }
     const [dto] = await this.present([membership], locale);
     return dto;
   }

@@ -27,6 +27,8 @@ export type AiConfig = {
   fallbacks: AiFallbacks;
   placesProvider: PlacesProviderName;
   placesApiKey: string;
+  /** ANTHROPIC_WORKSPACE_ID: sent as `anthropic-workspace-id` when set (keys not scoped to a workspace). Never logged. */
+  anthropicWorkspaceId: string | null;
 };
 
 type Env = Record<string, string | undefined>;
@@ -88,6 +90,7 @@ export function readAiConfig(env: Env): AiConfig {
     fallbacks: oneOf(env, 'AI_FALLBACKS', AI_FALLBACK_MODES, 'default'),
     placesProvider,
     placesApiKey,
+    anthropicWorkspaceId: env.ANTHROPIC_WORKSPACE_ID?.trim() || null,
   };
 }
 
@@ -96,6 +99,7 @@ const AI_ENV_KEYS = [
   'AI_PROVIDER',
   'AI_MODEL',
   'ANTHROPIC_API_KEY',
+  'ANTHROPIC_WORKSPACE_ID',
   'OPENAI_API_KEY',
   'AI_TIMEOUT_MS',
   'AI_MAX_TOKENS',

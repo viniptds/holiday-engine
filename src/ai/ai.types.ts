@@ -74,16 +74,40 @@ export type AiTurnDto = { id: string; role: MessageRole; text: string; draft: Tr
 
 export type TripPlaceDto = {
   id: string;
-  name: string;
-  category: PlaceCategory;
-  day: number | null;
-  notes: string | null;
   googlePlaceId: string;
+  name: string;
   address: string;
   lat: number;
   lng: number;
   rating: number | null;
   mapsUrl: string | null;
+  types: string[];
+  category: PlaceCategory;
+  day: number | null;
+  position: number;
+  /** `HH:MM`, local time at the destination. */
+  startTime: string | null;
+  notes: string | null;
   source: PlaceSource;
   createdAt: string;
 };
+
+/** `GET /trips/:id/places` and `PUT /trips/:id/itinerary`. */
+export type ItineraryDto = { places: TripPlaceDto[]; itineraryVersion: number };
+
+export type PlaceSearchResultDto = {
+  googlePlaceId: string;
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  rating: number | null;
+  types: string[];
+  suggestedCategory: PlaceCategory;
+  alreadyInTrip: boolean;
+};
+
+/** docs/app-itinerary-spec.md */
+export const MAX_TRIP_PLACES = 200;
+export const MAX_SEARCH_RESULTS = 10;
+export const SEARCH_RATE_LIMIT = { max: 60, windowMs: 60 * 60 * 1000 };

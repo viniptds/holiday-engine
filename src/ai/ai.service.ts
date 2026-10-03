@@ -14,8 +14,8 @@ import { daysBetween } from '../trips/dto/date-rules.js';
 import { AI_CONFIG } from './ai.config.js';
 import type { AiConfig } from './ai.config.js';
 import { MAX_LISTED_CONVERSATIONS, MAX_USER_MESSAGES_PER_CONVERSATION, RATE_LIMITS } from './ai.types.js';
-import type { AiConversationDto, AiTurnDto, DraftPlace, TripDraft, TripPlaceDto } from './ai.types.js';
-import { compareTripPlaces, toConversationDto, toTripPlaceDto, toTurnDto } from './ai.mapper.js';
+import type { AiConversationDto, AiTurnDto, DraftPlace, TripDraft } from './ai.types.js';
+import { toConversationDto, toTurnDto } from './ai.mapper.js';
 import { MODEL_DRAFT_SCHEMA, normalizeDraft, parseModelDraft, replayText } from './draft.js';
 import type { ModelDraft } from './draft.js';
 import { buildSystemPrompt } from './prompt.js';
@@ -26,6 +26,8 @@ import { TripPlace } from './entities/trip-place.entity.js';
 import { AiUnavailableError, LLM_PROVIDER } from './llm/llm-provider.js';
 import type { LlmHistoryEntry, LlmProvider } from './llm/llm-provider.js';
 import { PlacesVerifier } from './places/places-verifier.js';
+import { ItineraryService } from './itinerary.service.js';
+import type { NewTripPlace } from './itinerary.service.js';
 
 const conversationNotFound = () => new AppError('NOT_FOUND', 'Conversation not found');
 const notOpen = (status: string) => new AppError('CONFLICT', `This plan is ${status}; start a new one`);
@@ -65,6 +67,38 @@ export class FirstTurnUnavailableError extends AppError {
 const todayUtc = () => new Date().toISOString().slice(0, 10);
 
 /**
+ * The draft places to add: every verified one, or with `placeIds` only those (by googlePlaceId).
+ * An id that isn't a verified place of the draft → VALIDATION.
+ */
+function selectPlaces(places: DraftPlace[], placeIds: string[] | undefined): NewTripPlace[] {
+  const verified = places.filter((p) => p.verified && p.place);
+  let chosen = verified;
+  if (placeIds) {
+    const wanted = new Set(placeIds);
+    const known = new Set(verified.map((p) => p.place!.googlePlaceId));
+    if ([...wanted].some((id) => !known.has(id))) {
+      throw new AppError('VALIDATION', 'Some fields are invalid', { placeIds: "placeIds must be verified places of the plan's draft" });
+    }
+    chosen = verified.filter((p) => wanted.has(p.place!.googlePlaceId));
+  }
+  return chosen.map((draftPlace) => ({
+    match: {
+      googlePlaceId: draftPlace.place!.googlePlaceId,
+      name: draftPlace.place!.name || draftPlace.name,
+      address: draftPlace.place!.address,
+      location: { lat: draftPlace.place!.lat, lng: draftPlace.place!.lng },
+      rating: draftPlace.place!.rating,
+      types: draftPlace.place!.types,
+      mapsUrl: draftPlace.place!.mapsUrl,
+    },
+    category: draftPlace.category,
+    day: draftPlace.day,
+    notes: draftPlace.why || null,
+    source: 'ai',
+  }));
+}
+
+/**
  * AI trip planning. Conversations belong to their author only: anyone else gets NOT_FOUND, even
  * for a conversation linked to a trip they're a member of. Inputs are validated by the DTOs first.
  */
@@ -81,6 +115,7 @@ export class AiService {
     @Inject(AI_CONFIG) private readonly config: AiConfig,
     private readonly verifier: PlacesVerifier,
     private readonly appTrips: AppTripsService,
+    private readonly itinerary: ItineraryService,
   ) {}
 
   /** Starts a conversation with its first message. With `tripId`, the caller must be owner or editor. */
@@ -205,29 +240,39 @@ export class AiService {
 
   /**
    * Turns the latest ready draft into a trip with its verified places (`created: true`), or adds
-   * the places to the linked trip (`created: false`). Idempotent: once confirmed, it returns the
-   * same trip without adding anything. The trip is returned in `locale` (the persona label), like
-   * every Trip response.
+   * the places to the linked trip (`created: false`). With `placeIds` (draft places' googlePlaceIds),
+   * only those verified places are added. Each goes onto its suggested day (Unplanned if the trip
+   * has no such day), appended; places already in the trip are skipped (`added` / `skipped`).
+   * Idempotent: once confirmed, it returns the same trip without adding anything. The trip is
+   * returned in `locale` (the persona label), like every Trip response. Places are read and deleted
+   * through ItineraryService (`/trips/:id/places`).
    */
-  async confirm(user: AuthUser, conversationId: string, locale: Locale): Promise<{ trip: AppTripDto; created: boolean }> {
+  async confirm(
+    user: AuthUser,
+    conversationId: string,
+    locale: Locale,
+    placeIds?: string[],
+  ): Promise<{ trip: AppTripDto; created: boolean; added: number; skipped: number }> {
     const conversation = await this.requireConversation(user, conversationId);
-    if (conversation.status === 'confirmed') return this.confirmedTrip(user, conversation, locale);
+    if (conversation.status === 'confirmed') return { ...(await this.confirmedTrip(user, conversation, locale)), added: 0, skipped: 0 };
     if (conversation.status !== 'open') throw notOpen(conversation.status);
 
     const draft = (await this.history(conversation.id)).filter((m) => m.role === 'assistant').at(-1)?.draft ?? null;
     if (!draft?.ready) throw new AppError('CONFLICT', "The plan isn't ready yet: it needs a destination and dates");
-    const verified = draft.places.filter((p) => p.verified && p.place);
+    const selected = selectPlaces(draft.places, placeIds);
+    let counts = { added: 0, skipped: 0 };
+    const accept = async (manager: EntityManager, tripId: string) => {
+      await this.claim(manager, conversation.id, tripId);
+      counts = await this.itinerary.appendInTransaction(manager, tripId, user.id, selected);
+    };
 
     try {
       if (conversation.tripId) {
         const tripId = conversation.tripId;
         // The role is checked again: it may have changed since the conversation started.
         await this.appTrips.requireMembership(user, tripId, ['owner', 'editor']);
-        await this.conversations.manager.transaction(async (manager) => {
-          await this.claim(manager, conversation.id, tripId);
-          await this.insertPlaces(manager, tripId, user.id, verified);
-        });
-        return { trip: await this.appTrips.get(user, tripId, locale), created: false };
+        await this.conversations.manager.transaction((manager) => accept(manager, tripId));
+        return { trip: await this.appTrips.get(user, tripId, locale), created: false, ...counts };
       }
 
       const fields: Record<string, unknown> = {
@@ -240,33 +285,14 @@ export class AiService {
       };
       // The same validation as POST /trips.
       const data = (await appValidationPipe.transform(fields, { type: 'body', metatype: CreateAppTripDto })) as CreateAppTripDto;
-      const trip = await this.appTrips.create(user, data, locale, async (manager, created) => {
-        await this.claim(manager, conversation.id, created.id);
-        await this.insertPlaces(manager, created.id, user.id, verified);
-      });
-      return { trip, created: true };
+      const trip = await this.appTrips.create(user, data, locale, (manager, created) => accept(manager, created.id));
+      return { trip, created: true, ...counts };
     } catch (error) {
       if (!(error instanceof ConfirmRaceError)) throw error;
       const latest = await this.requireConversation(user, conversation.id);
-      if (latest.status === 'confirmed') return this.confirmedTrip(user, latest, locale);
+      if (latest.status === 'confirmed') return { ...(await this.confirmedTrip(user, latest, locale)), added: 0, skipped: 0 };
       throw notOpen(latest.status);
     }
-  }
-
-  /** Places of a trip the user is a member of, by day then name. */
-  async listPlaces(user: AuthUser, tripId: string): Promise<TripPlaceDto[]> {
-    await this.appTrips.requireMembership(user, tripId);
-    const rows = await this.places.find({ where: { tripId } });
-    return rows.sort(compareTripPlaces).map(toTripPlaceDto);
-  }
-
-  /** Owners and editors only. */
-  async deletePlace(user: AuthUser, tripId: string, placeId: string): Promise<void> {
-    await this.appTrips.requireMembership(user, tripId, ['owner', 'editor']);
-    const notFound = () => new AppError('NOT_FOUND', 'Place not found');
-    if (!isUUID(placeId, '4')) throw notFound();
-    const { affected } = await this.places.delete({ id: placeId, tripId });
-    if (!affected) throw notFound();
   }
 
   /** Account deletion: the user's conversations go; the places they added stay with their trips. */
@@ -300,33 +326,6 @@ export class AiService {
   private async claim(manager: EntityManager, conversationId: string, tripId: string): Promise<void> {
     const { affected } = await manager.update(AiConversation, { id: conversationId, status: 'open' }, { status: 'confirmed', tripId });
     if (!affected) throw new ConfirmRaceError();
-  }
-
-  /** Inserts verified places the trip doesn't have yet (one per Google place), under Google's name. */
-  private async insertPlaces(manager: EntityManager, tripId: string, userId: string, places: DraftPlace[]): Promise<void> {
-    const existing = await manager.find(TripPlace, { where: { tripId } });
-    const seen = new Set(existing.map((p) => p.googlePlaceId));
-    for (const draftPlace of places) {
-      const place = draftPlace.place!;
-      if (seen.has(place.googlePlaceId)) continue;
-      seen.add(place.googlePlaceId);
-      await manager.insert(TripPlace, {
-        tripId,
-        googlePlaceId: place.googlePlaceId,
-        name: (place.name || draftPlace.name).slice(0, 200),
-        category: draftPlace.category,
-        day: draftPlace.day,
-        notes: draftPlace.why || null,
-        address: place.address,
-        lat: place.lat,
-        lng: place.lng,
-        rating: place.rating,
-        mapsUrl: place.mapsUrl,
-        types: place.types,
-        source: 'ai',
-        createdBy: userId,
-      });
-    }
   }
 
   /**
