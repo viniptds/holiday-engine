@@ -40,6 +40,16 @@ class InMemoryRepository<T extends object> {
 
   constructor(private readonly options: { softDelete?: boolean; conflicts?: (a: Row, b: Row) => boolean }) {}
 
+  /** Transactions run straight through (no rollback or locks): the lock behaviour is covered over InMemoryDb. */
+  readonly manager = {
+    transaction: async <R>(work: (manager: unknown) => Promise<R>): Promise<R> =>
+      work({
+        findOne: (_entity: unknown, options: { where: Record<string, unknown> }) => this.findOne(options),
+        update: (_entity: unknown, where: Record<string, unknown>, changes: Partial<T>) => this.update(where, changes),
+        getRepository: () => this,
+      }),
+  };
+
   all(): T[] {
     return [...this.rows.values()].map((row) => ({ ...row }) as T);
   }
@@ -382,7 +392,7 @@ describe('App auth and profile (feature)', () => {
       const res = await call('GET', '/probe', { token: session.accessToken });
 
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ id: session.user.id, email: 'ana@example.com' });
+      expect(await res.json()).toEqual({ id: session.user.id, email: 'ana@example.com', devAccount: false });
     });
 
     it('exposes USER_DIRECTORY to modules importing AuthModule', async () => {

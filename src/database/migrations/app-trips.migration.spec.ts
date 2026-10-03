@@ -118,7 +118,10 @@ describe('AppTrips1760100000000', () => {
     const storage = getMetadataArgsStorage();
     const primary = storage.columns.filter((c) => c.target === TripMember && c.mode === 'regular' && c.options.primary);
     const check = storage.checks.find((c) => c.target === TripMember);
-    const indexes = storage.indices.filter((i) => i.target === TripMember).map((i) => [i.name, i.columns]);
+    // UQ_trip_members_one_owner comes later, from OneOwnerPerTrip1760200100000 (its own spec).
+    const indexes = storage.indices
+      .filter((i) => i.target === TripMember && i.name !== 'UQ_trip_members_one_owner')
+      .map((i) => [i.name, i.columns]);
     const relation = storage.relations.find((r) => r.target === TripMember && r.propertyName === 'trip');
     const joinColumn = storage.joinColumns.find((j) => j.target === TripMember && j.propertyName === 'trip');
 

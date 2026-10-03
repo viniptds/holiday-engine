@@ -5,6 +5,11 @@ export const APP_PREFIX = 'app/v1';
 export interface AuthUser {
   id: string;
   email: string;
+  /**
+   * Created by the dev login (Google `sub` `dev:<email>`), so `email` is unverified: it never
+   * satisfies an email-invite match. Always set by `AuthGuard`.
+   */
+  devAccount?: boolean;
 }
 
 /** Public profile of a user, as other features need it (member lists, invites). */

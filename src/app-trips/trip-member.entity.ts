@@ -6,6 +6,8 @@ import type { TripRole } from './app-trips.types.js';
 /** A user's membership of an app trip. */
 @Entity('trip_members')
 @Index('IDX_trip_members_userId', ['userId'])
+// At most one owner per trip.
+@Index('UQ_trip_members_one_owner', ['tripId'], { unique: true, where: `"role" = 'owner'` })
 @Check('CHK_trip_members_role', `"role" IN ('owner', 'editor', 'viewer')`)
 export class TripMember {
   @PrimaryColumn({ type: 'uuid', primaryKeyConstraintName: 'PK_trip_members' })

@@ -68,6 +68,26 @@ describe('POST /app/v1/auth/dev (feature, dev only)', () => {
     });
   });
 
+  // L2: fails closed. Only NODE_ENV development or test turns it on.
+  describe('when enabled outside a dev environment', () => {
+    it.each([
+      ['NODE_ENV unset', { DEV_LOGIN_ENABLED: 'true' }, 'unset'],
+      ['NODE_ENV=staging', { DEV_LOGIN_ENABLED: 'true', NODE_ENV: 'staging' }, '"staging"'],
+    ])('is not registered (%s → 404) and warns that it is ignored', async (_label, env, shown) => {
+      const booted = await boot(env);
+      app = booted.app;
+
+      const res = await post(booted.url, { email: 'ana@example.com' });
+
+      expect(res.status).toBe(404);
+      expect(booted.db.all(User)).toEqual([]);
+      expect(warn).toHaveBeenCalledWith(
+        `DEV_LOGIN_ENABLED=true is ignored: the dev login needs NODE_ENV=development or test (NODE_ENV is ${shown}).`,
+      );
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('signs anyone in'));
+    });
+  });
+
   it('fails startup when enabled in production', async () => {
     await expect(boot({ DEV_LOGIN_ENABLED: 'true', NODE_ENV: 'production' })).rejects.toThrow(
       'DEV_LOGIN_ENABLED=true is not allowed with NODE_ENV=production',
@@ -161,7 +181,11 @@ describe('POST /app/v1/auth/dev (feature, dev only)', () => {
 describe('dev login switches', () => {
   it.each([
     [{ DEV_LOGIN_ENABLED: 'true', NODE_ENV: 'development' }, true],
-    [{ DEV_LOGIN_ENABLED: 'TRUE' }, true],
+    [{ DEV_LOGIN_ENABLED: 'TRUE', NODE_ENV: 'test' }, true],
+    // Fails closed: only development and test count as dev environments.
+    [{ DEV_LOGIN_ENABLED: 'true' }, false],
+    [{ DEV_LOGIN_ENABLED: 'true', NODE_ENV: 'staging' }, false],
+    [{ DEV_LOGIN_ENABLED: 'true', NODE_ENV: '' }, false],
     [{ DEV_LOGIN_ENABLED: 'false', NODE_ENV: 'development' }, false],
     [{ DEV_LOGIN_ENABLED: '1' }, false],
     [{}, false],

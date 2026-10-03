@@ -11,16 +11,47 @@ import { AppTripsService } from '../app-trips/app-trips.service.js';
 import { compareMembers, toMemberSummary } from '../app-trips/app-trip.mapper.js';
 import type { TripRole } from '../app-trips/app-trips.types.js';
 import { TripInvite } from './trip-invite.entity.js';
+import { TripRemoval } from './trip-removal.entity.js';
 import { MemberDto } from './members.types.js';
 
 const memberNotFound = () => new AppError('NOT_FOUND', 'Member not found');
+const tripNotFound = () => new AppError('NOT_FOUND', 'Trip not found');
+const LOCK = { mode: 'pessimistic_write' } as const;
 
 /** What `handleUserDeleted` did, for logging and tests. */
 export type UserDeletionResult = { deletedTripIds: string[]; transferred: { tripId: string; newOwnerId: string }[] };
 
+const isUniqueViolation = (error: unknown) =>
+  (error as { code?: unknown })?.code === '23505' ||
+  (error as { driverError?: { code?: unknown } })?.driverError?.code === '23505';
+
+/**
+ * Runs a membership transaction. A unique violation (two owners, from a change that raced this
+ * one past the row locks) becomes CONFLICT instead of a 500.
+ */
+async function conflictOnRace<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (isUniqueViolation(error)) throw new AppError('CONFLICT', 'The trip changed meanwhile; please try again');
+    throw error;
+  }
+}
+
+/** Revokes the member's unused invites for the trip (they left, were removed or were demoted to viewer). */
+async function revokeInvitesBy(manager: EntityManager, tripId: string, userId: string): Promise<void> {
+  await manager.update(
+    TripInvite,
+    { tripId, createdBy: userId, revokedAt: IsNull(), acceptedAt: IsNull() },
+    { revokedAt: new Date() },
+  );
+}
+
 /**
  * Trip members. Access goes through `AppTripsService.requireMembership`: non-members get
- * NOT_FOUND, members without the role FORBIDDEN. A trip always has exactly one owner.
+ * NOT_FOUND, members without the role FORBIDDEN. A trip always has exactly one owner, which the
+ * database also enforces (UQ_trip_members_one_owner): every change re-reads and locks the acting
+ * member's row inside its transaction, so concurrent changes are checked against the latest roles.
  */
 @Injectable()
 export class MembersService {
@@ -38,8 +69,8 @@ export class MembersService {
   }
 
   /**
-   * Owner only. `owner` transfers ownership (the old owner becomes editor) in one transaction.
-   * The owner can't change their own role any other way.
+   * Owner only. `owner` transfers ownership (the old owner becomes editor). Demoting someone to
+   * viewer also revokes their unused invites. The owner can't change their own role any other way.
    */
   async updateRole(user: AuthUser, tripId: string, targetId: string, role: TripRole): Promise<MemberDto> {
     await this.appTrips.requireMembership(user, tripId, ['owner']);
@@ -49,11 +80,21 @@ export class MembersService {
       if (role !== 'owner') {
         throw new AppError('CONFLICT', "The owner can't change their own role; transfer ownership instead");
       }
-    } else if (role === 'owner') {
-      await this.members.manager.transaction((manager) => this.transferOwnership(manager, tripId, user.id, userId));
     } else {
-      const { affected } = await this.members.update({ tripId, userId, role: Not('owner') }, { role });
-      if (!affected) throw memberNotFound();
+      await conflictOnRace(() =>
+        this.members.manager.transaction(async (manager) => {
+          await this.lockActor(manager, tripId, user.id, 'owner');
+          if (role === 'owner') {
+            await this.transferOwnership(manager, tripId, user.id, userId);
+            return;
+          }
+          const target = await manager.findOne(TripMember, { where: { tripId, userId }, lock: LOCK });
+          // The actor is the owner, so the target isn't.
+          if (!target || target.role === 'owner') throw memberNotFound();
+          await manager.update(TripMember, { tripId, userId }, { role });
+          if (role === 'viewer') await revokeInvitesBy(manager, tripId, userId);
+        }),
+      );
     }
 
     const member = await this.members.findOne({ where: { tripId, userId } });
@@ -63,72 +104,93 @@ export class MembersService {
   }
 
   /**
-   * `me` (or the caller's own id) leaves; otherwise the owner removes a member. The owner can't
-   * leave or remove themselves (CONFLICT): they transfer ownership first. The departing member's
-   * unused invites for the trip are revoked in the same transaction.
+   * `me` (or the caller's own id) leaves; otherwise the owner removes a member, which is recorded so
+   * they can't rejoin through a link invite. The owner can't leave or remove themselves (CONFLICT):
+   * they transfer ownership first. The departing member's unused invites for the trip are revoked in
+   * the same transaction.
    */
   async remove(user: AuthUser, tripId: string, target: string): Promise<void> {
     const membership = await this.appTrips.requireMembership(user, tripId);
     const self = target === 'me' || target.toLowerCase() === user.id;
-    if (self && membership.role === 'owner') {
-      throw new AppError('CONFLICT', "The owner can't leave the trip; transfer ownership first");
-    }
+    if (self && membership.role === 'owner') throw ownerCantLeave();
     if (!self && membership.role !== 'owner') throw new AppError('FORBIDDEN', `A trip ${membership.role} can't do this`);
     const userId = self ? user.id : this.parseUserId(target);
 
-    await this.members.manager.transaction(async (manager) => {
-      const { affected } = await manager.delete(TripMember, { tripId, userId });
-      if (!affected) throw memberNotFound();
-      await manager.update(
-        TripInvite,
-        { tripId, createdBy: userId, revokedAt: IsNull(), acceptedAt: IsNull() },
-        { revokedAt: new Date() },
-      );
-    });
+    await conflictOnRace(() =>
+      this.members.manager.transaction(async (manager) => {
+        // Re-check the caller's role under a lock: an ownership transfer may have committed since.
+        const actor = await this.lockActor(manager, tripId, user.id);
+        if (self && actor.role === 'owner') throw ownerCantLeave();
+        if (!self && actor.role !== 'owner') throw new AppError('FORBIDDEN', `A trip ${actor.role} can't do this`);
+
+        const { affected } = await manager.delete(TripMember, { tripId, userId, role: Not('owner') });
+        if (!affected) throw memberNotFound();
+        await revokeInvitesBy(manager, tripId, userId);
+        if (!self) {
+          await manager.delete(TripRemoval, { tripId, userId });
+          await manager.insert(TripRemoval, { tripId, userId, removedBy: user.id, removedAt: new Date() });
+        }
+      }),
+    );
   }
 
   /**
    * Account deletion (wired to the users module's deletion hooks at G1). In one transaction:
    * trips the user is the only member of are deleted; shared trips they own pass to the
    * longest-standing editor, or else the longest-standing member; then their memberships are
-   * removed and their pending invites revoked.
+   * removed and their pending invites revoked. Their owner rows are locked first, so an ownership
+   * transfer running at the same time is either seen as done or waits.
    */
   handleUserDeleted(userId: string): Promise<UserDeletionResult> {
-    return this.members.manager.transaction(async (manager) => {
-      const result: UserDeletionResult = { deletedTripIds: [], transferred: [] };
-      const owned = await manager.find(TripMember, { where: { userId, role: 'owner' } });
-      for (const { tripId } of owned) {
-        const others = await manager.find(TripMember, {
-          where: { tripId, userId: Not(userId) },
-          order: { joinedAt: 'ASC', userId: 'ASC' },
-        });
-        if (others.length === 0) {
-          await manager.delete(Trip, { id: tripId });
-          result.deletedTripIds.push(tripId);
-          continue;
+    return conflictOnRace(() =>
+      this.members.manager.transaction(async (manager) => {
+        const result: UserDeletionResult = { deletedTripIds: [], transferred: [] };
+        const owned = await manager.find(TripMember, { where: { userId, role: 'owner' }, lock: LOCK });
+        for (const { tripId } of owned) {
+          const others = await manager.find(TripMember, {
+            where: { tripId, userId: Not(userId) },
+            order: { joinedAt: 'ASC', userId: 'ASC' },
+            lock: LOCK,
+          });
+          if (others.length === 0) {
+            await manager.delete(Trip, { id: tripId });
+            result.deletedTripIds.push(tripId);
+            continue;
+          }
+          const successor = others.find((m) => m.role === 'editor') ?? others[0];
+          // The departing owner goes first: the trip can't have two owners, even for a moment.
+          await manager.delete(TripMember, { tripId, userId });
+          await manager.update(TripMember, { tripId, userId: successor.userId }, { role: 'owner' });
+          await manager.update(Trip, { id: tripId }, { ownerUserId: successor.userId });
+          result.transferred.push({ tripId, newOwnerId: successor.userId });
         }
-        const successor = others.find((m) => m.role === 'editor') ?? others[0];
-        await manager.update(TripMember, { tripId, userId: successor.userId }, { role: 'owner' });
-        await manager.update(Trip, { id: tripId }, { ownerUserId: successor.userId });
-        result.transferred.push({ tripId, newOwnerId: successor.userId });
-      }
-      await manager.delete(TripMember, { userId });
-      await manager.update(
-        TripInvite,
-        { createdBy: userId, revokedAt: IsNull(), acceptedAt: IsNull() },
-        { revokedAt: new Date() },
-      );
-      return result;
-    });
+        await manager.delete(TripMember, { userId });
+        await manager.update(
+          TripInvite,
+          { createdBy: userId, revokedAt: IsNull(), acceptedAt: IsNull() },
+          { revokedAt: new Date() },
+        );
+        return result;
+      }),
+    );
   }
 
+  /**
+   * Re-reads the acting member's row with a lock inside the transaction. Gone → NOT_FOUND (like a
+   * non-member); not `role` (when given) → FORBIDDEN.
+   */
+  private async lockActor(manager: EntityManager, tripId: string, userId: string, role?: TripRole): Promise<TripMember> {
+    const actor = await manager.findOne(TripMember, { where: { tripId, userId }, lock: LOCK });
+    if (!actor) throw tripNotFound();
+    if (role && actor.role !== role) throw new AppError('FORBIDDEN', `A trip ${actor.role} can't do this`);
+    return actor;
+  }
+
+  /** Inside `updateRole`'s transaction, with the owner's row already locked and checked. */
   private async transferOwnership(manager: EntityManager, tripId: string, ownerId: string, newOwnerId: string) {
-    // Lock both rows and re-check, so two concurrent transfers can't both succeed.
-    const lock = { mode: 'pessimistic_write' } as const;
-    const owner = await manager.findOne(TripMember, { where: { tripId, userId: ownerId }, lock });
-    if (owner?.role !== 'owner') throw new AppError('FORBIDDEN', 'Only the owner can transfer ownership');
-    const next = await manager.findOne(TripMember, { where: { tripId, userId: newOwnerId }, lock });
+    const next = await manager.findOne(TripMember, { where: { tripId, userId: newOwnerId }, lock: LOCK });
     if (!next) throw memberNotFound();
+    // Demote first: the trip can't have two owners, even for a moment.
     await manager.update(TripMember, { tripId, userId: ownerId }, { role: 'editor' });
     await manager.update(TripMember, { tripId, userId: newOwnerId }, { role: 'owner' });
     await manager.update(Trip, { id: tripId }, { ownerUserId: newOwnerId });
@@ -148,3 +210,5 @@ export class MembersService {
     }));
   }
 }
+
+const ownerCantLeave = () => new AppError('CONFLICT', "The owner can't leave the trip; transfer ownership first");

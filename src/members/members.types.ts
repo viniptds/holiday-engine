@@ -21,6 +21,16 @@ export type InviteDto = {
   expiresAt: string;
 };
 
+/** Contract `InviteSummary`: a pending invite, as listed to the trip's owner (all) and editors (their own). */
+export type InviteSummaryDto = {
+  id: string;
+  email: string | null;
+  role: InviteRole;
+  createdBy: MemberSummary;
+  expiresAt: string;
+  createdAt: string;
+};
+
 export type InvitePreviewDto = {
   destination: string;
   startDate: string;

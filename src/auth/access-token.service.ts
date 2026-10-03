@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { AppError } from '../app-common/app-error.js';
 import type { AuthUser } from '../app-common/auth-user.js';
 import { UsersService } from '../users/users.service.js';
+import { isDevLoginAccount } from './dev-login.js';
 
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 
@@ -39,6 +40,6 @@ export class AccessTokenService {
 
     const user = await this.users.findActive(sub);
     if (!user) throw invalidAccessToken();
-    return { id: user.id, email: user.email };
+    return { id: user.id, email: user.email, devAccount: isDevLoginAccount(user.googleSub) };
   }
 }

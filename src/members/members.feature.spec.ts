@@ -5,19 +5,20 @@ import { Trip } from '../trips/trip.entity.js';
 import { TripMember } from '../app-trips/trip-member.entity.js';
 import type { AppTripDto, TripRole } from '../app-trips/app-trips.types.js';
 import { appDb } from '../testing/app-db.js';
-import { barrier } from '../testing/in-memory-db.js';
+import { Txn, barrier, UniqueViolationError } from '../testing/in-memory-db.js';
 import { accessTokens, appTestingModule, seedUser } from '../testing/app-testing.js';
 import { User } from '../users/user.entity.js';
 import { RefreshToken } from '../auth/refresh-token.entity.js';
 import { RefreshTokenService } from '../auth/refresh-token.service.js';
 import { TripInvite } from './trip-invite.entity.js';
+import { TripRemoval } from './trip-removal.entity.js';
 import { MembersModule } from './members.module.js';
 import { MembersService } from './members.service.js';
 import { EMAIL_INVITE_LIMITS, InvitesService, hashToken } from './invites.service.js';
 import { MailInviteMailer } from './invite-mailer.js';
 import { MAIL_TRANSPORT } from '../mail/mail.types.js';
 import type { MailMessage, MailTransport } from '../mail/mail.types.js';
-import type { InviteDto, MemberDto } from './members.types.js';
+import type { InviteDto, InviteSummaryDto, MemberDto } from './members.types.js';
 
 const OWNER = '11111111-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
 const EDITOR = '22222222-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
@@ -30,13 +31,17 @@ const ANA = '77777777-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
 const ANA_TWIN = '88888888-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
 const ANA_CAPS = '99999999-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
 const SOMEONE = 'aaaaaaaa-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
+// A dev-login account (Google sub `dev:<email>`): its email is unverified.
+const DEV_ANA = 'bbbbbbbb-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
 const EMAILS: Record<string, string> = {
   [ANA]: 'ana@example.com',
   [ANA_TWIN]: 'ana@example.com',
   [ANA_CAPS]: 'Ana@EXAMPLE.com',
   [SOMEONE]: 'someone@else.org',
+  [DEV_ANA]: 'ana@example.com',
 };
-const ALL_USERS = [OWNER, EDITOR, VIEWER, OUTSIDER, NEWCOMER, OTHER, ANA, ANA_TWIN, ANA_CAPS, SOMEONE];
+const SUBS: Record<string, string> = { [DEV_ANA]: 'dev:ana@example.com' };
+const ALL_USERS = [OWNER, EDITOR, VIEWER, OUTSIDER, NEWCOMER, OTHER, ANA, ANA_TWIN, ANA_CAPS, SOMEONE, DEV_ANA];
 const USERS: Record<string, string> = { owner: OWNER, editor: EDITOR, viewer: VIEWER, outsider: OUTSIDER };
 const DAY = 86_400_000;
 
@@ -70,7 +75,9 @@ describe('Members and invites API (feature)', () => {
 
   beforeEach(() => {
     db.clear();
-    for (const id of ALL_USERS) seedUser(db, id, EMAILS[id] ? { email: EMAILS[id] } : {});
+    for (const id of ALL_USERS) {
+      seedUser(db, id, { ...(EMAILS[id] && { email: EMAILS[id] }), ...(SUBS[id] && { googleSub: SUBS[id] }) });
+    }
     db.afterRead = undefined;
     db.beforeWrite = undefined;
     sendInvite.mockClear();
@@ -380,6 +387,24 @@ describe('Members and invites API (feature)', () => {
 
   describe('POST /trips/:id/invites', () => {
     it.each([
+      ['removed', (id: string) => db.manager(null).delete(TripMember, { tripId: id, userId: EDITOR })],
+      ['demoted to viewer', (id: string) => db.manager(null).update(TripMember, { tripId: id, userId: EDITOR }, { role: 'viewer' })],
+    ] as const)('creates nothing if the inviter is %s after the first membership check', async (_label, change) => {
+      const id = seedTrip();
+      let reads = 0;
+      // The first trip_members read is requireMembership; the change lands right after it.
+      db.afterRead = async (entity) => {
+        if (entity === TripMember && ++reads === 1) await change(id);
+      };
+
+      const res = await call('POST', `/trips/${id}/invites`, EDITOR, { email: 'bia@example.com' });
+
+      expect(res.status).toBe(_label === 'removed' ? 404 : 403);
+      expect(db.all(TripInvite)).toEqual([]);
+      expect(sendInvite).not.toHaveBeenCalled();
+    });
+
+    it.each([
       ['owner', 201],
       ['editor', 201],
       ['viewer', 403],
@@ -597,7 +622,9 @@ describe('Members and invites API (feature)', () => {
     });
 
     it('uses a 15 s overall timeout by default', () => {
-      expect(new InvitesService({} as never, {} as never, {} as never, {} as never, { get: () => undefined } as never).sendTimeoutMs).toBe(15_000);
+      expect(
+        new InvitesService({} as never, {} as never, {} as never, {} as never, {} as never, { get: () => undefined } as never).sendTimeoutMs,
+      ).toBe(15_000);
     });
 
     it("says \"a Holid.ai traveler\" (localized) when the inviter has no display name, never their email", async () => {
@@ -733,7 +760,8 @@ describe('Members and invites API (feature)', () => {
       await call('POST', `/trips/${id}/invites`, OWNER, { email: ' Bia@Example.com ' });
       await call('POST', `/trips/${id}/invites`, OWNER, {});
 
-      expect(query.mock.calls.map(([sql, params, undo]) => [sql, params, Array.isArray(undo)])).toEqual([
+      // The third argument is the transaction that holds the lock (null would mean outside one).
+      expect(query.mock.calls.map(([sql, params, txn]) => [sql, params, txn instanceof Txn])).toEqual([
         ['SELECT pg_advisory_xact_lock(hashtext($1))', [`trip-invite:inviter:${OWNER}`], true],
         ['SELECT pg_advisory_xact_lock(hashtext($1))', [`trip-invite:recipient:${id}:bia@example.com`], true],
       ]);
@@ -1044,6 +1072,455 @@ describe('Members and invites API (feature)', () => {
 
       await expect(members.handleUserDeleted(OUTSIDER)).resolves.toEqual({ deletedTripIds: [], transferred: [] });
       expect(db.all(TripMember)).toHaveLength(3);
+    });
+  });
+
+  describe('GET /trips/:id/invites', () => {
+    it.each([
+      ['viewer', 403],
+      ['outsider', 404],
+    ])('as %s is %i', async (who, status) => {
+      const id = seedTrip();
+      expect((await call('GET', `/trips/${id}/invites`, USERS[who])).status).toBe(status);
+    });
+
+    it("lists the owner every pending invite, newest first, with who created it", async () => {
+      const id = seedTrip();
+      const at = (minutes: number) => new Date(Date.UTC(2026, 9, 2, 10, minutes));
+      seedInvite(id, { createdBy: OWNER, createdAt: at(1) });
+      seedInvite(id, { createdBy: EDITOR, email: 'ana@example.com', role: 'viewer', createdAt: at(2) });
+      seedInvite(id, { createdBy: OWNER, revokedAt: new Date(), createdAt: at(3) });
+      seedInvite(id, { createdBy: OWNER, email: 'bob@example.com', acceptedBy: NEWCOMER, acceptedAt: new Date(), createdAt: at(4) });
+      seedInvite(id, { createdBy: OWNER, expiresAt: new Date(Date.now() - 1000), createdAt: at(5) });
+      seedInvite(seedTrip(OTHER, []), { createdBy: OTHER, createdAt: at(6) });
+
+      const res = await call('GET', `/trips/${id}/invites`, OWNER);
+
+      expect(res.status).toBe(200);
+      const { invites } = (await res.json()) as { invites: InviteSummaryDto[] };
+      expect(invites).toEqual([
+        {
+          id: expect.any(String),
+          email: 'ana@example.com',
+          role: 'viewer',
+          createdBy: { userId: EDITOR, displayName: 'Traveler 2222', avatarUrl: null, role: 'editor' },
+          expiresAt: expect.any(String),
+          createdAt: at(2).toISOString(),
+        },
+        {
+          id: expect.any(String),
+          email: null,
+          role: 'editor',
+          createdBy: { userId: OWNER, displayName: 'Traveler 1111', avatarUrl: null, role: 'owner' },
+          expiresAt: expect.any(String),
+          createdAt: at(1).toISOString(),
+        },
+      ]);
+      // Never the token or its hash.
+      expect(JSON.stringify(invites)).not.toMatch(/token|[0-9a-f]{64}/i);
+    });
+
+    it('lists an editor only their own invites', async () => {
+      const id = seedTrip();
+      seedInvite(id, { createdBy: OWNER });
+      seedInvite(id, { createdBy: EDITOR });
+
+      const { invites } = (await (await call('GET', `/trips/${id}/invites`, EDITOR)).json()) as { invites: InviteSummaryDto[] };
+
+      expect(invites.map((i) => i.createdBy.userId)).toEqual([EDITOR]);
+    });
+  });
+
+  describe('DELETE /trips/:id/invites/:inviteId', () => {
+    const inviteId = (token: string) => db.all(TripInvite, { tokenHash: hashToken(token) })[0].id;
+
+    it.each([
+      ['owner', OWNER, 'its own', 204],
+      ['owner', EDITOR, "an editor's", 204],
+      ['editor', EDITOR, 'its own', 204],
+      ['editor', OWNER, "the owner's", 403],
+      ['viewer', OWNER, "the owner's", 403],
+      ['outsider', OWNER, "the owner's", 404],
+    ])('as %s, revoking %s invite → %i', async (who, creator, _label, status) => {
+      const id = seedTrip();
+      const token = seedInvite(id, { createdBy: creator });
+
+      const res = await call('DELETE', `/trips/${id}/invites/${inviteId(token)}`, USERS[who]);
+
+      expect(res.status).toBe(status);
+      const revoked = db.all(TripInvite)[0].revokedAt !== null;
+      expect(revoked).toBe(status === 204);
+      expect((await call('POST', `/invites/${token}/accept`, NEWCOMER)).status).toBe(status === 204 ? 404 : 200);
+    });
+
+    it('is 404 the second time', async () => {
+      const id = seedTrip();
+      const token = seedInvite(id);
+
+      expect((await call('DELETE', `/trips/${id}/invites/${inviteId(token)}`, OWNER)).status).toBe(204);
+      const revokedAt = db.all(TripInvite)[0].revokedAt;
+      const again = await call('DELETE', `/trips/${id}/invites/${inviteId(token)}`, OWNER);
+      expect(await again.json()).toEqual({ code: 'NOT_FOUND', message: 'Invite not found' });
+      expect(db.all(TripInvite)[0].revokedAt).toEqual(revokedAt);
+    });
+
+    it.each([
+      ['used', { email: 'bob@example.com', acceptedBy: NEWCOMER, acceptedAt: new Date() }],
+      ['revoked', { revokedAt: new Date(Date.UTC(2026, 0, 1)) }],
+      ['expired', { expiresAt: new Date(Date.now() - 1000) }],
+    ])('is 404 for a %s invite, left unchanged', async (_label, fields) => {
+      const id = seedTrip();
+      const token = seedInvite(id, fields as Partial<TripInvite>);
+      const before = db.all(TripInvite)[0];
+
+      const res = await call('DELETE', `/trips/${id}/invites/${inviteId(token)}`, OWNER);
+
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({ code: 'NOT_FOUND', message: 'Invite not found' });
+      expect(db.all(TripInvite)[0]).toEqual(before);
+    });
+
+    it('checks the role first: a viewer gets 403 even for a dead invite, and an editor 404 for a dead one of the owner', async () => {
+      const id = seedTrip();
+      const dead = seedInvite(id, { createdBy: OWNER, revokedAt: new Date() });
+
+      expect((await call('DELETE', `/trips/${id}/invites/${inviteId(dead)}`, VIEWER)).status).toBe(403);
+      expect((await call('DELETE', `/trips/${id}/invites/${randomUUID()}`, VIEWER)).status).toBe(403);
+      expect((await call('DELETE', `/trips/${id}/invites/${inviteId(dead)}`, EDITOR)).status).toBe(404);
+    });
+
+    describe('racing an accept (BUG-022)', () => {
+      /** Pauses the `n`th read of `entity` (1-based) until `release()`; `reached` resolves when it's there. */
+      function pauseRead(entity: unknown, n: number) {
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => (release = resolve));
+        let reads = 0;
+        let arrive!: () => void;
+        const reached = new Promise<void>((resolve) => (arrive = resolve));
+        db.afterRead = async (e) => {
+          if (e === entity && ++reads === n) {
+            arrive();
+            await gate;
+          }
+        };
+        return { reached, release };
+      }
+      const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+      it('orders a revoke after an accept that holds the link invite: both succeed, in that order', async () => {
+        const id = seedTrip();
+        const token = seedInvite(id);
+        // The accept's 2nd invite read is the locked re-read: pause there, holding the lock.
+        const hold = pauseRead(TripInvite, 2);
+        const accept = call('POST', `/invites/${token}/accept`, NEWCOMER);
+        await hold.reached;
+        db.afterRead = undefined;
+        const revoke = call('DELETE', `/trips/${id}/invites/${inviteId(token)}`, OWNER);
+        await settle();
+        // The revoke is waiting for the lock: nothing revoked yet.
+        expect(db.all(TripInvite)[0].revokedAt).toBeNull();
+        hold.release();
+
+        expect((await accept).status).toBe(200);
+        expect((await revoke).status).toBe(204);
+        expect(roleOf(id, NEWCOMER)).toBe('editor');
+        expect((await call('POST', `/invites/${token}/accept`, OUTSIDER)).status).toBe(404);
+      });
+
+      it('makes a revoke that waited for an email-invite accept lose with 404', async () => {
+        const id = seedTrip();
+        const token = seedInvite(id, { email: 'ana@example.com' });
+        const hold = pauseRead(TripInvite, 2);
+        const accept = call('POST', `/invites/${token}/accept`, ANA);
+        await hold.reached;
+        db.afterRead = undefined;
+        const revoke = call('DELETE', `/trips/${id}/invites/${inviteId(token)}`, OWNER);
+        await settle();
+        hold.release();
+
+        expect((await accept).status).toBe(200);
+        expect((await revoke).status).toBe(404);
+        expect(db.all(TripInvite)[0]).toMatchObject({ acceptedBy: ANA, revokedAt: null });
+      });
+    });
+
+    it('lets only one of two concurrent revokes succeed', async () => {
+      const id = seedTrip();
+      const token = seedInvite(id);
+      const bothRead = barrier(2);
+      db.afterRead = async (entity) => {
+        if (entity === TripInvite) await bothRead();
+      };
+
+      const results = await Promise.all([
+        call('DELETE', `/trips/${id}/invites/${inviteId(token)}`, OWNER),
+        call('DELETE', `/trips/${id}/invites/${inviteId(token)}`, OWNER),
+      ]);
+
+      expect(results.map((r) => r.status).sort()).toEqual([204, 404]);
+    });
+
+    it("is 404 for an unknown or malformed id, or another trip's invite", async () => {
+      const id = seedTrip();
+      const other = seedTrip(OWNER, []);
+      const othersToken = seedInvite(other);
+
+      for (const bad of [randomUUID(), 'nope', inviteId(othersToken)]) {
+        const res = await call('DELETE', `/trips/${id}/invites/${bad}`, OWNER);
+        expect(await res.json()).toEqual({ code: 'NOT_FOUND', message: 'Invite not found' });
+      }
+      expect(db.all(TripInvite)[0].revokedAt).toBeNull();
+    });
+  });
+
+  describe('removed members (M1)', () => {
+    /** NEWCOMER joins through the link, then the owner removes them. */
+    async function joinAndRemove() {
+      const id = seedTrip();
+      const link = seedInvite(id);
+      expect((await call('POST', `/invites/${link}/accept`, NEWCOMER)).status).toBe(200);
+      expect((await call('DELETE', `/trips/${id}/members/${NEWCOMER}`, OWNER)).status).toBe(204);
+      return { id, link };
+    }
+
+    it('records the removal and refuses rejoining through a link invite', async () => {
+      const { id, link } = await joinAndRemove();
+      const another = seedInvite(id, { createdBy: EDITOR });
+
+      for (const token of [link, another]) {
+        const res = await call('POST', `/invites/${token}/accept`, NEWCOMER);
+        expect(res.status).toBe(403);
+        expect(await res.json()).toEqual({ code: 'FORBIDDEN', message: 'You were removed from this trip' });
+      }
+      expect(roleOf(id, NEWCOMER)).toBeUndefined();
+      expect(db.all(TripRemoval)).toEqual([{ tripId: id, userId: NEWCOMER, removedBy: OWNER, removedAt: expect.any(Date) }]);
+      // The link still works for everyone else.
+      expect((await call('POST', `/invites/${link}/accept`, OUTSIDER)).status).toBe(200);
+    });
+
+    it('lets an email invite created after the removal bring them back, which lifts the removal', async () => {
+      const { id, link } = await joinAndRemove();
+      const email = seedInvite(id, { email: '5555@example.com', createdAt: new Date(Date.now() + 1000) });
+
+      expect((await call('POST', `/invites/${email}/accept`, NEWCOMER)).status).toBe(200);
+      expect(roleOf(id, NEWCOMER)).toBe('editor');
+      expect(db.all(TripRemoval)).toEqual([]);
+
+      // Leaving afterwards isn't a removal: the link works again.
+      expect((await call('DELETE', `/trips/${id}/members/me`, NEWCOMER)).status).toBe(204);
+      expect((await call('POST', `/invites/${link}/accept`, NEWCOMER)).status).toBe(200);
+    });
+
+    it('keeps refusing an email invite that was created before the removal, without using it up', async () => {
+      const id = seedTrip();
+      const early = seedInvite(id, { email: '5555@example.com', createdAt: new Date(Date.now() - DAY) });
+      const link = seedInvite(id);
+      await call('POST', `/invites/${link}/accept`, NEWCOMER);
+      await call('DELETE', `/trips/${id}/members/${NEWCOMER}`, OWNER);
+
+      const res = await call('POST', `/invites/${early}/accept`, NEWCOMER);
+
+      expect(res.status).toBe(403);
+      expect(await res.json()).toMatchObject({ message: 'You were removed from this trip' });
+      expect(db.all(TripInvite, { tokenHash: hashToken(early) })[0].acceptedAt).toBeNull();
+    });
+
+    // S-24, the ordering the in-memory DB can model soundly: the accept reads the membership (still
+    // there) before the removal commits. (An accept landing inside the removal's transaction can't be
+    // modelled: InMemoryDb has no isolation, so it would see the deleted membership before the
+    // removal row, which Postgres never shows. Covered by the serial cases above instead.)
+    it('never leaves a member behind when the removal lands while their accept is in flight', async () => {
+      const id = seedTrip();
+      const link = seedInvite(id);
+      expect((await call('POST', `/invites/${link}/accept`, NEWCOMER)).status).toBe(200);
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      let arrive!: () => void;
+      const reached = new Promise<void>((resolve) => (arrive = resolve));
+      let held = false;
+      db.afterRead = async (entity) => {
+        // The accept's membership check (it's already a member, so it returns early).
+        if (entity === TripMember && !held) {
+          held = true;
+          arrive();
+          await gate;
+        }
+      };
+      const accept = call('POST', `/invites/${link}/accept`, NEWCOMER);
+      await reached;
+      expect((await call('DELETE', `/trips/${id}/members/${NEWCOMER}`, OWNER)).status).toBe(204);
+      release();
+
+      expect((await accept).status).toBe(404);
+      expect(roleOf(id, NEWCOMER)).toBeUndefined();
+      expect(db.all(TripRemoval, { tripId: id, userId: NEWCOMER })).toHaveLength(1);
+    });
+
+    it("doesn't treat leaving as a removal", async () => {
+      const id = seedTrip();
+      const link = seedInvite(id);
+
+      expect((await call('DELETE', `/trips/${id}/members/me`, VIEWER)).status).toBe(204);
+      expect(db.all(TripRemoval)).toEqual([]);
+      expect((await call('POST', `/invites/${link}/accept`, VIEWER)).status).toBe(200);
+    });
+
+    it('updates the removal time when someone is removed again', async () => {
+      const { id } = await joinAndRemove();
+      const first = db.all(TripRemoval)[0].removedAt;
+      const email = seedInvite(id, { email: '5555@example.com', createdAt: new Date(Date.now() + 1000) });
+      await call('POST', `/invites/${email}/accept`, NEWCOMER);
+
+      expect((await call('DELETE', `/trips/${id}/members/${NEWCOMER}`, OWNER)).status).toBe(204);
+
+      expect(db.all(TripRemoval)).toHaveLength(1);
+      expect(db.all(TripRemoval)[0].removedAt.getTime()).toBeGreaterThanOrEqual(first.getTime());
+    });
+  });
+
+  describe('demotion to viewer (M2)', () => {
+    it("revokes the demoted editor's unused invites, so their link no longer works", async () => {
+      const id = seedTrip();
+      const editorsLink = seedInvite(id, { createdBy: EDITOR });
+      const editorsEmail = seedInvite(id, { createdBy: EDITOR, email: 'ana@example.com' });
+      const ownersLink = seedInvite(id, { createdBy: OWNER });
+
+      expect((await call('PATCH', `/trips/${id}/members/${EDITOR}`, OWNER, { role: 'viewer' })).status).toBe(200);
+
+      expect((await call('POST', `/invites/${editorsLink}/accept`, NEWCOMER)).status).toBe(404);
+      expect((await call('POST', `/invites/${editorsEmail}/accept`, ANA)).status).toBe(404);
+      expect((await call('POST', `/invites/${ownersLink}/accept`, OUTSIDER)).status).toBe(200);
+    });
+
+    it('revokes nothing when a viewer is promoted to editor', async () => {
+      const id = seedTrip(OWNER, [[EDITOR, 'editor'], [VIEWER, 'viewer']]);
+      const editorsLink = seedInvite(id, { createdBy: EDITOR });
+
+      expect((await call('PATCH', `/trips/${id}/members/${VIEWER}`, OWNER, { role: 'editor' })).status).toBe(200);
+      expect((await call('POST', `/invites/${editorsLink}/accept`, NEWCOMER)).status).toBe(200);
+    });
+
+    it('keeps the role and the invites when the revocation fails', async () => {
+      const id = seedTrip();
+      const editorsLink = seedInvite(id, { createdBy: EDITOR });
+      db.beforeWrite = (operation, entity) => {
+        if (operation === 'update' && entity === TripInvite) throw new Error('db down');
+      };
+
+      expect((await call('PATCH', `/trips/${id}/members/${EDITOR}`, OWNER, { role: 'viewer' })).status).toBe(500);
+      db.beforeWrite = undefined;
+      expect(roleOf(id, EDITOR)).toBe('editor');
+      expect((await call('POST', `/invites/${editorsLink}/accept`, NEWCOMER)).status).toBe(200);
+    });
+  });
+
+  describe('one owner per trip (L1)', () => {
+    const owners = (tripId: string) => db.all(TripMember, { tripId, role: 'owner' }).map((m) => m.userId);
+    const ownerUser = { id: OWNER, email: '1111@example.com' };
+    /** Resolves after the current requests have had time to reach their next lock. */
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+    /** Pauses the `n`th TripMember read (1-based) until `release` is called. */
+    function pauseRead(n: number) {
+      let release!: () => void;
+      const released = new Promise<void>((resolve) => (release = resolve));
+      let reads = 0;
+      db.afterRead = async (entity) => {
+        if (entity === TripMember && ++reads === n) await released;
+      };
+      return release;
+    }
+
+    it("refuses a removal whose owner check went stale: a transfer to the target committed first", async () => {
+      const id = seedTrip();
+      // The removal reads the owner's membership (still owner) and pauses there...
+      const release = pauseRead(1);
+      const removal = members.remove(ownerUser, id, EDITOR);
+      // ...while the owner hands the trip to that same editor.
+      db.afterRead = undefined;
+      await members.updateRole(ownerUser, id, EDITOR, 'owner');
+      release();
+
+      await expect(removal).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(owners(id)).toEqual([EDITOR]);
+      expect(roleOf(id, OWNER)).toBe('editor');
+    });
+
+    it('keeps one owner when the owner deletes their account during a transfer (transfer first)', async () => {
+      const id = seedTrip(OWNER, [[EDITOR, 'editor'], [NEWCOMER, 'editor']]);
+      // The transfer locks the owner's row (its 2nd TripMember read) and pauses with the lock held.
+      const release = pauseRead(2);
+      const transfer = members.updateRole(ownerUser, id, NEWCOMER, 'owner');
+      await settle();
+      // The deletion has to wait for that lock; it then sees OWNER as an editor, not an owner.
+      const deletion = members.handleUserDeleted(OWNER);
+      await settle();
+      release();
+
+      await expect(transfer).resolves.toMatchObject({ userId: NEWCOMER, role: 'owner' });
+      await expect(deletion).resolves.toEqual({ deletedTripIds: [], transferred: [] });
+      expect(owners(id)).toEqual([NEWCOMER]);
+      expect(roleOf(id, EDITOR)).toBe('editor');
+      expect(roleOf(id, OWNER)).toBeUndefined();
+    });
+
+    it('keeps one owner when the owner deletes their account during a transfer (deletion first)', async () => {
+      const id = seedTrip(OWNER, [[EDITOR, 'editor'], [NEWCOMER, 'editor']]);
+      // The deletion locks the owner's row (its 1st read) and pauses...
+      const release = pauseRead(1);
+      const deletion = members.handleUserDeleted(OWNER);
+      await settle();
+      // ...so the transfer, past its unlocked pre-check, waits for the lock and then finds no owner row.
+      const transfer = members.updateRole(ownerUser, id, NEWCOMER, 'owner');
+      await settle();
+      release();
+
+      await expect(deletion).resolves.toEqual({ deletedTripIds: [], transferred: [{ tripId: id, newOwnerId: EDITOR }] });
+      await expect(transfer).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(owners(id)).toEqual([EDITOR]);
+      expect(db.all(Trip, { id })[0].ownerUserId).toBe(EDITOR);
+    });
+
+    it('is enforced by the database: a second owner is a unique violation', () => {
+      const id = seedTrip();
+
+      expect(() => db.seed(TripMember, { tripId: id, userId: OUTSIDER, role: 'owner' })).toThrow(UniqueViolationError);
+      expect(db.all(TripMember, { tripId: id, userId: OUTSIDER })).toEqual([]);
+    });
+
+    it('maps a unique violation inside a membership change to 409 CONFLICT, changing nothing', async () => {
+      const id = seedTrip();
+      db.beforeWrite = (operation, entity) => {
+        if (operation === 'update' && entity === Trip) {
+          throw new UniqueViolationError('duplicate key value violates unique constraint', 'UQ_trip_members_one_owner');
+        }
+      };
+
+      const res = await call('PATCH', `/trips/${id}/members/${EDITOR}`, OWNER, { role: 'owner' });
+
+      expect(res.status).toBe(409);
+      expect(await res.json()).toEqual({ code: 'CONFLICT', message: expect.any(String) });
+      expect(owners(id)).toEqual([OWNER]);
+    });
+  });
+
+  describe('dev-login accounts (L2)', () => {
+    it("can't accept an email invite, even to their email, which stays unused", async () => {
+      const id = seedTrip();
+      const token = seedInvite(id, { email: 'ana@example.com' });
+
+      const res = await call('POST', `/invites/${token}/accept`, DEV_ANA);
+
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ code: 'FORBIDDEN', message: expect.stringContaining('Test accounts') });
+      expect(roleOf(id, DEV_ANA)).toBeUndefined();
+      expect((await call('POST', `/invites/${token}/accept`, ANA)).status).toBe(200);
+    });
+
+    it('can still use a link invite', async () => {
+      const id = seedTrip();
+
+      expect((await call('POST', `/invites/${seedInvite(id)}/accept`, DEV_ANA)).status).toBe(200);
     });
   });
 });

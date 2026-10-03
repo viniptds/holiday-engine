@@ -9,6 +9,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Trip } from '../trips/trip.entity.js';
 import { TripMember } from '../app-trips/trip-member.entity.js';
 import { TripInvite } from '../members/trip-invite.entity.js';
+import { TripRemoval } from '../members/trip-removal.entity.js';
 import { User } from '../users/user.entity.js';
 import { RefreshToken } from '../auth/refresh-token.entity.js';
 import { AccessTokenService } from '../auth/access-token.service.js';
@@ -28,7 +29,7 @@ export function appTestingModule(db: InMemoryDb, imports: unknown[], config: Rec
       ...(imports as never[]),
     ],
   });
-  for (const entity of [User, RefreshToken, Trip, TripMember, TripInvite]) {
+  for (const entity of [User, RefreshToken, Trip, TripMember, TripInvite, TripRemoval]) {
     builder = builder.overrideProvider(getRepositoryToken(entity)).useValue(db.repository(entity as never));
   }
   return builder;
