@@ -136,6 +136,9 @@ describe('MessagesRouter', () => {
       ['trip.create', { destination: '   ', startDate: '2026-11-01', endDate: '2026-11-05' }, 'destination should not be empty'],
       ['trip.create', { destination: 'Lisbon', startDate: '2026-11-05', endDate: '2026-11-01' }, 'endDate must be on or after startDate'],
       ['trip.update', { tripId: TRIP_ID, destination: null }, 'destination'],
+      // BUG-013: NUL would otherwise reach Postgres and come back as INTERNAL.
+      ['trip.create', { destination: 'Lis\u0000bon', startDate: '2026-11-01', endDate: '2026-11-05' }, 'destination must not contain control characters'],
+      ['trip.update', { tripId: TRIP_ID, notes: 'a\u0000b' }, 'notes must not contain control characters'],
       ['trip.delete', { tripId: 'nope' }, 'tripId must be a UUID'],
       ['events.suggest', {}, 'tripId must be a UUID'],
     ])('%s with an invalid payload → VALIDATION', async (type, payload, text) => {

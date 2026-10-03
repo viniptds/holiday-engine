@@ -1,6 +1,7 @@
 import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { IsDateOnly } from './is-date-only.validator.js';
 import { Trim } from './trim.transform.js';
+import { NoControlChars } from './no-control-chars.validator.js';
 import { IsOnOrAfter } from './is-on-or-after.validator.js';
 import { MAX_TRIP_DAYS } from './date-rules.js';
 
@@ -10,6 +11,7 @@ export class CreateTripDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
+  @NoControlChars()
   destination: string;
 
   @IsDateOnly()
@@ -22,5 +24,6 @@ export class CreateTripDto {
   @IsOptional()
   @IsString()
   @MaxLength(500)
+  @NoControlChars()
   notes?: string | null;
 }

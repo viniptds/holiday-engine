@@ -197,3 +197,32 @@ describe('contract rules added with Task D', () => {
     expect(Object.values(reversed.constraints!)).toEqual(['endDate must be on or after startDate']);
   });
 });
+
+// BUG-013: Postgres rejects NUL in text, which surfaced as INTERNAL instead of VALIDATION.
+describe('control characters in text fields', () => {
+  const valid = { destination: 'Lisbon', startDate: '2026-11-01', endDate: '2026-11-05' };
+
+  it.each([0x00, 0x01, 0x08, 0x0b, 0x0c, 0x1b, 0x1f])(
+    'rejects control character 0x%s in destination and notes',
+    async (code) => {
+      const char = String.fromCharCode(code);
+      expect(await failedProps(CreateTripDto, { ...valid, destination: `Lis${char}bon` })).toEqual(['destination']);
+      expect(await failedProps(CreateTripDto, { ...valid, notes: `a${char}b` })).toEqual(['notes']);
+      expect(await failedProps(UpdateTripDto, { tripId: TRIP_ID, destination: `Lis${char}bon` })).toEqual([
+        'destination',
+      ]);
+      expect(await failedProps(UpdateTripDto, { tripId: TRIP_ID, notes: `a${char}b` })).toEqual(['notes']);
+    },
+  );
+
+  it('allows tab, line feed and carriage return in notes, and non-ASCII text', async () => {
+    expect(await failedProps(CreateTripDto, { ...valid, notes: 'pack:\tsunscreen\r\nhat\n' })).toEqual([]);
+    expect(await failedProps(CreateTripDto, { ...valid, destination: 'São Paulo 🌴', notes: null })).toEqual([]);
+  });
+
+  it('explains the failure', async () => {
+    const [error] = await validate(plainToInstance(CreateTripDto, { ...valid, destination: 'Lis\u0000bon' }));
+
+    expect(Object.values(error.constraints!)).toEqual(['destination must not contain control characters']);
+  });
+});
