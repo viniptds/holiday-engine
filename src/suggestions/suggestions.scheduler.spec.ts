@@ -122,6 +122,20 @@ describe('SuggestionsScheduler', () => {
     });
   });
 
+  describe('app trips', () => {
+    it('skips trips without a chat (app trips), without looking up events', async () => {
+      const appTrip = Object.assign(makeTrip('app', '0'), { provider: null, chatId: null, ownerUserId: 'u1' });
+      findActiveOn.mockResolvedValueOnce([appTrip, makeTrip('t1', '111')]);
+      suggestScheduled.mockResolvedValueOnce([event('a')]);
+
+      await scheduler.run(now);
+
+      expect(suggestScheduled).toHaveBeenCalledTimes(1);
+      expect(publish).toHaveBeenCalledTimes(1);
+      expect(publish).toHaveBeenCalledWith(expect.objectContaining({ chatId: '111' }), 'events.suggestions', expect.anything());
+    });
+  });
+
   describe('cron registration', () => {
     it('registers the default daily 09:00 UTC job', () => {
       scheduler.onApplicationBootstrap();

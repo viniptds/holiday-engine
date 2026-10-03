@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { Trip } from '../trips/trip.entity.js';
 import { SuggestedEvent } from '../events/suggested-event.entity.js';
+import { TripMember } from '../app-trips/trip-member.entity.js';
 import { migrations } from './migrations/index.js';
 
 const isTrue = (value: string | undefined): boolean => value?.toLowerCase() === 'true';
@@ -18,7 +19,7 @@ export function databaseConfig(config: ConfigService): TypeOrmModuleOptions {
     database: config.get<string>('PGDATABASE'),
     ssl: isTrue(config.get<string>('PGSSL')) ? { rejectUnauthorized: false } : false,
     uuidExtension: 'pgcrypto',
-    entities: [Trip, SuggestedEvent],
+    entities: [Trip, SuggestedEvent, TripMember],
     migrations,
     migrationsRun: true,
     synchronize: isTrue(config.get<string>('DB_SYNCHRONIZE')),

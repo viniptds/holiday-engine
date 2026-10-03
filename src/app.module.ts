@@ -8,6 +8,7 @@ import { MessagesModule } from './messages/messages.module.js';
 import { TripsModule } from './trips/trips.module.js';
 import { EventsModule } from './events/events.module.js';
 import { SuggestionsModule } from './suggestions/suggestions.module.js';
+import { AppTripsModule } from './app-trips/app-trips.module.js';
 import { databaseConfig } from './database/database.config.js';
 
 @Module({
@@ -31,6 +32,7 @@ import { databaseConfig } from './database/database.config.js';
     TripsModule,
     EventsModule,
     SuggestionsModule,
+    AppTripsModule,
   ],
   controllers: [AppController],
 })

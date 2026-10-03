@@ -50,6 +50,7 @@ describe('CreateTrips1759449600000', () => {
         ['IDX_trips_dates', ['startDate', 'endDate']],
       ]),
     );
-    expect(checks).toEqual([['CHK_trips_dates', '"endDate" >= "startDate"']]);
+    // Later checks (app trips) are covered by their migration's spec.
+    expect(checks).toEqual(expect.arrayContaining([['CHK_trips_dates', '"endDate" >= "startDate"']]));
   });
 });

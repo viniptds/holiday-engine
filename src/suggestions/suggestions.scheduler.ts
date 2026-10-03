@@ -46,11 +46,14 @@ export class SuggestionsScheduler implements OnApplicationBootstrap {
   async run(now: Date = new Date()): Promise<void> {
     const trips = await this.trips.findActiveOn(formatDateOnly(now));
     for (const trip of trips) {
+      // App trips have no chat to send to.
+      const { provider, chatId } = trip;
+      if (!provider || !chatId) continue;
       try {
         const events = await this.events.suggestScheduled(trip, now);
         if (events.length === 0) continue;
         await this.outbound.publish(
-          { provider: trip.provider, chatId: trip.chatId, correlationId: null },
+          { provider, chatId, correlationId: null },
           'events.suggestions',
           { trip: toTripDto(trip), events, trigger: 'scheduled' },
         );
