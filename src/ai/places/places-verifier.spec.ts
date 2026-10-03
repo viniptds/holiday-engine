@@ -56,6 +56,7 @@ describe('PlacesVerifier', () => {
       verified: true,
       place: {
         googlePlaceId: 'id-Belem Tower',
+        name: 'id-Belem Tower',
         address: 'id-Belem Tower address',
         lat: 38.71,
         lng: -9.14,

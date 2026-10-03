@@ -32,6 +32,7 @@ export function createLlmProvider(config: AiConfig): LlmProvider {
         model: config.model,
         maxTokens: config.maxTokens,
         effort: config.effort,
+        fallbacks: config.fallbacks,
         timeoutMs: config.timeoutMs,
       });
     case 'openai':

@@ -96,6 +96,22 @@ describe('AnthropicProvider', () => {
     });
   });
 
+  it('can leave out effort (models without it) and switch fallbacks off, header included', async () => {
+    const { instance, fetch } = provider([json(200, message())], { effort: null, fallbacks: 'off', model: 'claude-haiku-4-5' });
+
+    await instance.draftTurn(INPUT);
+
+    const body = sentBody(fetch);
+    expect(body.output_config).toEqual({ format: { type: 'json_schema', schema: SCHEMA } });
+    expect(body).not.toHaveProperty('fallbacks');
+    expect(body.model).toBe('claude-haiku-4-5');
+    expect(sentHeaders(fetch)).toEqual({
+      'content-type': 'application/json',
+      'x-api-key': 'sk-ant-test',
+      'anthropic-version': '2023-06-01',
+    });
+  });
+
   it('never disables thinking and never prefills (the last message is the user turn)', async () => {
     const { instance, fetch } = provider([json(200, message())]);
     await instance.draftTurn(INPUT);

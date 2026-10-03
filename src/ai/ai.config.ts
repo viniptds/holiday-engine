@@ -9,6 +9,9 @@ export type PlacesProviderName = (typeof PLACES_PROVIDERS)[number];
 export const AI_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 export type AiEffort = (typeof AI_EFFORTS)[number];
 
+export const AI_FALLBACK_MODES = ['default', 'off'] as const;
+export type AiFallbacks = (typeof AI_FALLBACK_MODES)[number];
+
 export const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-5-5';
 
 export type AiConfig = {
@@ -18,7 +21,10 @@ export type AiConfig = {
   apiKey: string;
   timeoutMs: number;
   maxTokens: number;
-  effort: AiEffort;
+  /** Anthropic `output_config.effort`; null → not sent (models without effort, e.g. Haiku 4.5). */
+  effort: AiEffort | null;
+  /** Anthropic server-side fallbacks: `default` sends `fallbacks: "default"` and its beta header. */
+  fallbacks: AiFallbacks;
   placesProvider: PlacesProviderName;
   placesApiKey: string;
 };
@@ -77,7 +83,9 @@ export function readAiConfig(env: Env): AiConfig {
     apiKey,
     timeoutMs: positiveInt(env, 'AI_TIMEOUT_MS', 30_000),
     maxTokens: positiveInt(env, 'AI_MAX_TOKENS', 4096),
-    effort: oneOf(env, 'AI_EFFORT', AI_EFFORTS, 'low'),
+    // Unset → low; set but empty → not sent.
+    effort: env.AI_EFFORT !== undefined && env.AI_EFFORT.trim() === '' ? null : oneOf(env, 'AI_EFFORT', AI_EFFORTS, 'low'),
+    fallbacks: oneOf(env, 'AI_FALLBACKS', AI_FALLBACK_MODES, 'default'),
     placesProvider,
     placesApiKey,
   };
@@ -92,6 +100,7 @@ const AI_ENV_KEYS = [
   'AI_TIMEOUT_MS',
   'AI_MAX_TOKENS',
   'AI_EFFORT',
+  'AI_FALLBACKS',
   'PLACES_PROVIDER',
   'GOOGLE_PLACES_API_KEY',
 ];

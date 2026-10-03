@@ -1,6 +1,7 @@
 import { jest } from '@jest/globals';
 import { QueryRunner, getMetadataArgsStorage } from 'typeorm';
 import { CreateAiTables1760400000000 } from './1760400000000-create-ai-tables.js';
+import { AddAiMessageAttempts1760400100000 } from './1760400100000-add-ai-message-attempts.js';
 import { migrations } from './index.js';
 import { AiConversation } from '../../ai/entities/ai-conversation.entity.js';
 import { AiMessage } from '../../ai/entities/ai-message.entity.js';
@@ -8,16 +9,15 @@ import { TripPlace } from '../../ai/entities/trip-place.entity.js';
 
 const normalize = (sql: string) => sql.replace(/\s+/g, ' ').trim();
 
-async function run(direction: 'up' | 'down'): Promise<string[]> {
+async function run(direction: 'up' | 'down', migration: { up: Function; down: Function } = new CreateAiTables1760400000000()): Promise<string[]> {
   const query = jest.fn(async (_sql: string) => undefined);
-  await new CreateAiTables1760400000000()[direction]({ query } as unknown as QueryRunner);
+  await migration[direction]({ query } as unknown as QueryRunner);
   return query.mock.calls.map(([s]) => normalize(s));
 }
 
 describe('CreateAiTables1760400000000', () => {
-  it('runs last, in the range reserved for the AI branch', () => {
+  it('runs after the user foreign keys, in the range reserved for the AI branch', () => {
     const names = migrations.map((m) => m.name);
-    expect(names.at(-1)).toBe('CreateAiTables1760400000000');
     expect(names.indexOf('CreateAiTables1760400000000')).toBeGreaterThan(names.indexOf('AddUserForeignKeys1760190000000'));
   });
 
@@ -89,7 +89,7 @@ describe('CreateAiTables1760400000000', () => {
   ];
 
   it.each(entities)('matches the %s entity checks, uniques, indexes and relations', async (_name, entity, relations) => {
-    const sql = (await run('up')).join('\n');
+    const sql = [...(await run('up')), ...(await run('up', new AddAiMessageAttempts1760400100000()))].join('\n');
     const storage = getMetadataArgsStorage();
 
     for (const check of storage.checks.filter((c) => c.target === entity)) {
@@ -108,5 +108,24 @@ describe('CreateAiTables1760400000000', () => {
       expect(relation?.options.onDelete).toBe(onDelete);
       expect(sql).toContain(`CONSTRAINT "${name}" FOREIGN KEY`);
     }
+  });
+});
+
+describe('AddAiMessageAttempts1760400100000', () => {
+  it('runs right after the AI tables', () => {
+    const names = migrations.map((m) => m.name);
+    expect(names.indexOf('AddAiMessageAttempts1760400100000')).toBe(names.indexOf('CreateAiTables1760400000000') + 1);
+  });
+
+  it('adds attempts (at least 1, default 1) and removes it again', async () => {
+    const migration = new AddAiMessageAttempts1760400100000();
+    expect(await run('up', migration)).toEqual([
+      'ALTER TABLE "ai_messages" ADD "attempts" smallint NOT NULL DEFAULT 1',
+      'ALTER TABLE "ai_messages" ADD CONSTRAINT "CHK_ai_messages_attempts" CHECK ("attempts" >= 1)',
+    ]);
+    expect(await run('down', migration)).toEqual([
+      'ALTER TABLE "ai_messages" DROP CONSTRAINT "CHK_ai_messages_attempts"',
+      'ALTER TABLE "ai_messages" DROP COLUMN "attempts"',
+    ]);
   });
 });

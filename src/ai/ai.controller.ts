@@ -8,7 +8,7 @@ import type { Locale } from '../app-common/locale.js';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import type { AppTripDto } from '../app-trips/app-trips.types.js';
-import { AiService } from './ai.service.js';
+import { AiService, FirstTurnUnavailableError } from './ai.service.js';
 import type { AiConversationDto, AiTurnDto, TripPlaceDto } from './ai.types.js';
 import { ConfirmAiConversationDto, PostAiMessageDto, StartAiConversationDto } from './dto/ai-message.dto.js';
 
@@ -22,14 +22,22 @@ type StatusResponse = { status(code: number): unknown };
 export class AiConversationsController {
   constructor(private readonly ai: AiService) {}
 
+  /** `201`. If the first turn fails, `503 { code: 'AI_UNAVAILABLE', message, conversationId }` to retry in. */
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  start(
+  async start(
     @CurrentUser() user: AuthUser,
     @RequestLocale() locale: Locale,
     @Body(appValidationPipe) body: StartAiConversationDto,
-  ): Promise<{ conversation: AiConversationDto; turn: AiTurnDto }> {
-    return this.ai.start(user, locale, body);
+    @Res({ passthrough: true }) response: StatusResponse,
+  ): Promise<{ conversation: AiConversationDto; turn: AiTurnDto } | { code: string; message: string; conversationId: string }> {
+    try {
+      return await this.ai.start(user, locale, body);
+    } catch (error) {
+      if (!(error instanceof FirstTurnUnavailableError)) throw error;
+      response.status(HttpStatus.SERVICE_UNAVAILABLE);
+      return { code: error.code, message: error.message, conversationId: error.conversationId };
+    }
   }
 
   @Get()

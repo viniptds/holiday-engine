@@ -44,13 +44,19 @@ class ScriptedLlm implements LlmProvider {
   }
 }
 
-/** Mock places, except that anything called "...Park" resolves far away (so it stays unverified). */
+/**
+ * Mock places, except that anything called "...Park" resolves far away (so it stays unverified),
+ * and Google knows "Lisbon Central Market" by another name.
+ */
 const mockPlaces = new MockPlacesProvider();
 const places: PlacesProvider = {
   name: 'mock',
   searchText: async (search: PlaceSearch) => {
     const match = await mockPlaces.searchText(search);
-    return match && search.query.includes('Park') ? { ...match, location: { lat: match.location.lat + 3, lng: match.location.lng } } : match;
+    if (!match) return match;
+    if (search.query.includes('Park')) return { ...match, location: { lat: match.location.lat + 3, lng: match.location.lng } };
+    if (search.query.startsWith('Lisbon Central Market')) return { ...match, name: 'Time Out Market Lisboa' };
+    return match;
   },
 };
 
@@ -148,9 +154,9 @@ describe('AI trip planning API (feature)', () => {
     return db.seed(AiConversation, { userId, tripId: null, status: 'open', title: null, ...fields });
   }
 
-  function seedUserMessages(conversationId: string, count: number, ageMs: (i: number) => number) {
+  function seedUserMessages(conversationId: string, count: number, ageMs: (i: number) => number, attempts = 1) {
     for (let i = 0; i < count; i += 1) {
-      db.seed(AiMessage, { conversationId, role: 'user', text: `message ${i}`, createdAt: new Date(Date.now() - ageMs(i)) });
+      db.seed(AiMessage, { conversationId, role: 'user', text: `message ${i}`, createdAt: new Date(Date.now() - ageMs(i)), attempts });
     }
   }
 
@@ -351,6 +357,33 @@ describe('AI trip planning API (feature)', () => {
       expect((await start('A trip to Lisbon')).response.status).toBe(201);
     });
 
+    it('counts every attempt, so retried messages weigh more', async () => {
+      const conversation = seedConversation(AUTHOR);
+      // 10 messages tried 3 times each: 30 attempts in the last hour.
+      seedUserMessages(conversation.id, 10, (i) => (40 - i) * MINUTE, 3);
+
+      const response = await call('POST', '/ai/conversations', AUTHOR, { message: 'A trip to Lisbon' });
+      expect(response.status).toBe(429);
+      // Under 30 once the oldest message (3 attempts, 40 minutes old) leaves the window: in 20 minutes.
+      const retryAfter = Number(response.headers.get('retry-after'));
+      expect(retryAfter).toBeGreaterThan(19 * 60);
+      expect(retryAfter).toBeLessThanOrEqual(20 * 60);
+    });
+
+    it('lets exactly the allowed number through when sends race at the limit', async () => {
+      const conversation = seedConversation(AUTHOR);
+      seedUserMessages(conversation.id, 27, (i) => (50 - i) * MINUTE);
+      // Yield after every read, so unserialized requests would all pass the check before any insert.
+      db.afterRead = () => new Promise((resolve) => setImmediate(resolve));
+
+      const responses = await Promise.all(
+        Array.from({ length: 6 }, (_, i) => call('POST', '/ai/conversations', AUTHOR, { message: `A trip to Rome ${i}` })),
+      );
+
+      expect(responses.map((r) => r.status).sort()).toEqual([201, 201, 201, 429, 429, 429]);
+      expect(db.all(AiMessage, { role: 'user' }).reduce((n, m) => n + m.attempts, 0)).toBe(30);
+    });
+
     it('counts messages whose reply failed', async () => {
       const conversation = seedConversation(AUTHOR);
       seedUserMessages(conversation.id, 29, () => 5 * MINUTE);
@@ -379,6 +412,7 @@ describe('AI trip planning API (feature)', () => {
       expect(retried.response.status).toBe(200);
       expect(retried.body.turn.draft!.ready).toBe(true);
       expect(db.all(AiMessage, { conversationId: id }).map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant']);
+      expect(db.all(AiMessage, { conversationId: id, role: 'user' }).map((m) => m.attempts)).toEqual([1, 2]);
     });
 
     it('merges consecutive user messages when replaying history', async () => {
@@ -409,8 +443,40 @@ describe('AI trip planning API (feature)', () => {
 
       expect(response.status).toBe(503);
       expect(llm.calls).toHaveLength(2);
-      // The conversation and its first message stay, so it shows up in the list to retry.
       expect(db.all(AiMessage).map((m) => m.role)).toEqual(['user']);
+    });
+
+    it('names the new conversation when the first turn fails, so the app can retry there', async () => {
+      llm.script = ['fail'];
+      const response = await call('POST', '/ai/conversations', AUTHOR, { message: 'A trip to Lisbon' });
+
+      expect(response.status).toBe(503);
+      const body = (await response.json()) as { code: string; message: string; conversationId: string };
+      const [conversation] = db.all(AiConversation);
+      expect(body).toEqual({ code: 'AI_UNAVAILABLE', message: expect.any(String), conversationId: conversation.id });
+
+      const retried = await send(body.conversationId, 'A trip to Lisbon');
+      expect(retried.response.status).toBe(200);
+      expect(db.all(AiMessage, { role: 'user' })).toEqual([expect.objectContaining({ text: 'A trip to Lisbon', attempts: 2 })]);
+    });
+
+    it('allows 3 retries of a failed turn, then CONFLICT', async () => {
+      const { body } = await start('A trip to Lisbon');
+      const id = body.conversation.id;
+      llm.script = ['fail', 'fail', 'fail', 'fail'];
+
+      for (let attempt = 1; attempt <= 4; attempt += 1) {
+        expect((await send(id, 'From 2026-11-10 to 2026-11-14')).response.status).toBe(503);
+      }
+      const [failed] = db.all(AiMessage, { conversationId: id, text: 'From 2026-11-10 to 2026-11-14' });
+      expect(failed.attempts).toBe(4);
+
+      const refused = await send(id, 'From 2026-11-10 to 2026-11-14');
+      expect(refused.response.status).toBe(409);
+      expect(llm.calls).toHaveLength(5);
+
+      // A different message is a new turn.
+      expect((await send(id, 'Dates: 2026-11-10 to 2026-11-14')).response.status).toBe(200);
     });
   });
 
@@ -439,11 +505,12 @@ describe('AI trip planning API (feature)', () => {
 
       const placesResponse = await call('GET', `/trips/${trip.id}/places`, AUTHOR);
       const { places: saved } = (await placesResponse.json()) as { places: TripPlaceDto[] };
+      // Verified places are saved under Google's name; the AI's reason becomes the notes.
       expect(saved.map((p) => [p.name, p.day, p.source])).toEqual([
-        ['Lisbon Central Market', 1, 'ai'],
         ['Lisbon Old Town', 1, 'ai'],
+        ['Time Out Market Lisboa', 1, 'ai'],
       ]);
-      expect(saved[0]).toMatchObject({ googlePlaceId: expect.stringMatching(/^mock-/), notes: 'Local food in one place.' });
+      expect(saved[1]).toMatchObject({ googlePlaceId: expect.stringMatching(/^mock-/), notes: 'Local food in one place.' });
       expect(db.all(AiConversation)[0]).toMatchObject({ status: 'confirmed', tripId: trip.id });
 
       const again = await call('POST', `/ai/conversations/${id}/confirm`, AUTHOR, {});

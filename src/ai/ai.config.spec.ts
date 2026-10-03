@@ -10,6 +10,7 @@ describe('readAiConfig', () => {
       timeoutMs: 30_000,
       maxTokens: 4096,
       effort: 'low',
+      fallbacks: 'default',
       placesProvider: 'mock',
       placesApiKey: '',
     });
@@ -51,8 +52,17 @@ describe('readAiConfig', () => {
     expect(readAiConfig({ ...real, NODE_ENV: 'production' }).provider).toBe('anthropic');
   });
 
+  it('leaves effort out when AI_EFFORT is set but empty, and switches fallbacks off', () => {
+    expect(readAiConfig({ AI_EFFORT: '' }).effort).toBeNull();
+    expect(readAiConfig({ AI_EFFORT: '  ' }).effort).toBeNull();
+    expect(readAiConfig({ AI_EFFORT: 'high' }).effort).toBe('high');
+    expect(readAiConfig({ AI_FALLBACKS: 'off' }).fallbacks).toBe('off');
+    expect(readAiConfig({ AI_FALLBACKS: '' }).fallbacks).toBe('default');
+  });
+
   it.each([
     [{ AI_PROVIDER: 'gemini' }, 'AI_PROVIDER must be one of'],
+    [{ AI_FALLBACKS: 'sometimes' }, 'AI_FALLBACKS must be one of'],
     [{ AI_EFFORT: 'huge' }, 'AI_EFFORT must be one of'],
     [{ AI_TIMEOUT_MS: '0' }, 'AI_TIMEOUT_MS must be a positive integer'],
     [{ AI_MAX_TOKENS: 'lots' }, 'AI_MAX_TOKENS must be a positive integer'],

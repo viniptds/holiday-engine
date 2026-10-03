@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import type { AiEffort } from '../ai.config.js';
+import type { AiEffort, AiFallbacks } from '../ai.config.js';
 import { AiUnavailableError } from './llm-provider.js';
 import type { DraftTurnInput, DraftTurnResult, LlmProvider } from './llm-provider.js';
 import { postJson, realSleep } from './http-json.js';
@@ -14,7 +14,10 @@ export type AnthropicOptions = {
   apiKey: string;
   model: string;
   maxTokens: number;
-  effort: AiEffort;
+  /** null → `output_config.effort` isn't sent. */
+  effort: AiEffort | null;
+  /** `off` → neither the `fallbacks` field nor its beta header. Default `default`. */
+  fallbacks?: AiFallbacks;
   timeoutMs: number;
   maxRetries?: number;
   fetch?: FetchFn;
@@ -46,15 +49,28 @@ export class AnthropicProvider implements LlmProvider {
   }
 
   /** The request body. Exported shape is pinned by tests. */
+  private get fallbacksOn(): boolean {
+    return (this.options.fallbacks ?? 'default') === 'default';
+  }
+
   buildBody(input: Omit<DraftTurnInput, 'signal'>, maxTokens = this.options.maxTokens) {
+    const format = { type: 'json_schema', schema: input.schema };
     return {
       model: this.options.model,
       max_tokens: maxTokens,
       system: input.system,
       messages: input.history.map((entry) => ({ role: entry.role, content: entry.text })),
-      output_config: { effort: this.options.effort, format: { type: 'json_schema', schema: input.schema } },
-      fallbacks: 'default',
+      output_config: this.options.effort ? { effort: this.options.effort, format } : { format },
+      ...(this.fallbacksOn ? { fallbacks: 'default' } : {}),
       cache_control: { type: 'ephemeral' },
+    };
+  }
+
+  buildHeaders(): Record<string, string> {
+    return {
+      'x-api-key': this.options.apiKey,
+      'anthropic-version': ANTHROPIC_VERSION,
+      ...(this.fallbacksOn ? { 'anthropic-beta': ANTHROPIC_FALLBACK_BETA } : {}),
     };
   }
 
@@ -67,11 +83,7 @@ export class AnthropicProvider implements LlmProvider {
       const response = (await postJson({
         provider: this.name,
         url: ANTHROPIC_MESSAGES_URL,
-        headers: {
-          'x-api-key': this.options.apiKey,
-          'anthropic-version': ANTHROPIC_VERSION,
-          'anthropic-beta': ANTHROPIC_FALLBACK_BETA,
-        },
+        headers: this.buildHeaders(),
         body: this.buildBody(input, maxTokens),
         timeoutMs: this.options.timeoutMs,
         maxRetries: this.options.maxRetries ?? 2,
@@ -84,7 +96,7 @@ export class AnthropicProvider implements LlmProvider {
       inputTokens += response.usage?.input_tokens ?? 0;
       outputTokens += response.usage?.output_tokens ?? 0;
 
-      // Check stop_reason before reading content. A refusal here is final: fallbacks already ran.
+      // Check stop_reason before reading content. With fallbacks on, a refusal here is final: they already ran.
       if (response.stop_reason === 'refusal') throw new AiUnavailableError('anthropic: refusal');
       if (response.stop_reason === 'max_tokens') {
         maxTokens *= 2;

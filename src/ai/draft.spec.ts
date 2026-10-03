@@ -137,7 +137,7 @@ describe('normalizeName', () => {
 describe('replayText', () => {
   it('rebuilds the model JSON from a stored turn, without verification data', () => {
     const draft = normalizeDraft(model());
-    draft.places[0] = { ...draft.places[0], verified: true, place: { googlePlaceId: 'g1', address: 'a', lat: 1, lng: 2, rating: null, types: [], mapsUrl: null } };
+    draft.places[0] = { ...draft.places[0], verified: true, place: { googlePlaceId: 'g1', name: 'Mercado', address: 'a', lat: 1, lng: 2, rating: null, types: [], mapsUrl: null } };
 
     expect(JSON.parse(replayText('Here is a plan', draft))).toEqual(model());
     expect(replayText('Here is a plan', draft)).toBe(replayText('Here is a plan', draft));

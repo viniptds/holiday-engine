@@ -27,6 +27,8 @@ export const RATE_LIMITS = [
 /** A Google Places match for a draft place. */
 export type VerifiedPlace = {
   googlePlaceId: string;
+  /** Google's `displayName.text`: the name saved on the trip, so it matches Maps. */
+  name: string;
   address: string;
   lat: number;
   lng: number;

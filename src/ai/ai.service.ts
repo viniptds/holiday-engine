@@ -35,8 +35,27 @@ const aiUnavailable = () =>
 /** Overall budget for one turn: per-call timeout × (1 + retries) × (1 + the max_tokens/invalid-output retry). */
 const TURN_BUDGET_FACTOR = 6;
 
+/** A failed turn can be retried 3 times: 4 attempts in all. */
+export const MAX_TURN_ATTEMPTS = 4;
+
+/** Transaction-scoped advisory lock; Postgres hashes the text key to a lock id (as feature/mail does). */
+const ADVISORY_XACT_LOCK = 'SELECT pg_advisory_xact_lock(hashtext($1))';
+
+/** Serializes a user's rate-limit check and message insert, so concurrent sends can't exceed the limits. */
+async function lockUser(manager: EntityManager, userId: string): Promise<void> {
+  await manager.query(ADVISORY_XACT_LOCK, [`ai:user:${userId}`]);
+}
+
 /** Another request confirmed the conversation first; the transaction rolls back. */
 class ConfirmRaceError extends Error {}
+
+/** AI_UNAVAILABLE on a conversation's first turn: the body also names the new conversation. */
+export class FirstTurnUnavailableError extends AppError {
+  constructor(readonly conversationId: string) {
+    super('AI_UNAVAILABLE', aiUnavailable().message);
+    this.name = 'FirstTurnUnavailableError';
+  }
+}
 
 const todayUtc = () => new Date().toISOString().slice(0, 10);
 
@@ -66,47 +85,75 @@ export class AiService {
     input: { message: string; tripId?: string },
   ): Promise<{ conversation: AiConversationDto; turn: AiTurnDto }> {
     const linked = input.tripId ? (await this.appTrips.requireMembership(user, input.tripId, ['owner', 'editor'])).trip! : null;
-    await this.checkRateLimit(user.id);
 
-    const conversation = await this.conversations.save(
-      this.conversations.create({
-        userId: user.id,
-        tripId: linked?.id ?? null,
-        status: 'open',
-        title: linked ? linked.destination.slice(0, 100) : null,
-      }),
-    );
-    const first = await this.messages.save(
-      this.messages.create({ conversationId: conversation.id, role: 'user', text: input.message, draft: null }),
-    );
-    const turn = await this.reply(conversation, locale, [first]);
+    const { conversation, first } = await this.conversations.manager.transaction(async (manager) => {
+      await lockUser(manager, user.id);
+      await this.checkRateLimit(manager, user.id);
+      const conversation = await manager.save(
+        manager.create(AiConversation, {
+          userId: user.id,
+          tripId: linked?.id ?? null,
+          status: 'open',
+          title: linked ? linked.destination.slice(0, 100) : null,
+        }),
+      );
+      const first = await manager.save(
+        manager.create(AiMessage, { conversationId: conversation.id, role: 'user', text: input.message, draft: null, attempts: 1 }),
+      );
+      return { conversation, first };
+    });
+
+    let turn: AiTurnDto;
+    try {
+      turn = await this.reply(conversation, locale, [first]);
+    } catch (error) {
+      // The conversation exists: tell the app which one, so it can retry there.
+      if (error instanceof AppError && error.code === 'AI_UNAVAILABLE') throw new FirstTurnUnavailableError(conversation.id);
+      throw error;
+    }
     const updated = await this.conversations.findOneBy({ id: conversation.id });
     return { conversation: toConversationDto(updated ?? conversation), turn };
   }
 
   /**
    * Adds a user message and returns the assistant's turn. Sending the same text again right after
-   * a failed turn retries it without storing (or counting) the message twice.
+   * a failed turn retries it: no second row, but the attempt is counted on the message (and toward
+   * the rate limits), at most MAX_TURN_ATTEMPTS in all.
    */
   async post(user: AuthUser, locale: Locale, conversationId: string, message: string): Promise<AiTurnDto> {
     const conversation = await this.requireConversation(user, conversationId);
     if (conversation.status !== 'open') throw notOpen(conversation.status);
 
-    const history = await this.history(conversation.id);
-    const last = history.at(-1);
-    const retry = last?.role === 'user' && last.text === message;
-    if (!retry) {
-      const sent = history.filter((m) => m.role === 'user').length;
-      if (sent >= MAX_USER_MESSAGES_PER_CONVERSATION) {
-        throw new AppError('CONFLICT', 'This plan has reached its message limit; start a new plan');
+    // The checks and the write run under the user's lock, so concurrent sends are counted one by one.
+    const history = await this.conversations.manager.transaction(async (manager) => {
+      await lockUser(manager, user.id);
+      const history = await manager.find(AiMessage, { where: { conversationId: conversation.id }, order: { createdAt: 'ASC' } });
+      const last = history.at(-1);
+      if (last?.role === 'user' && last.text === message) {
+        if (last.attempts >= MAX_TURN_ATTEMPTS) {
+          throw new AppError('CONFLICT', 'This message failed too many times; send a different message or start a new plan');
+        }
+        await this.checkRateLimit(manager, user.id);
+        // The retry is counted at its own time: the row moves to now (it's the latest message anyway).
+        const now = new Date();
+        await manager.update(AiMessage, { id: last.id }, { attempts: last.attempts + 1, createdAt: now });
+        Object.assign(last, { attempts: last.attempts + 1, createdAt: now });
+      } else {
+        const sent = history.filter((m) => m.role === 'user').length;
+        if (sent >= MAX_USER_MESSAGES_PER_CONVERSATION) {
+          throw new AppError('CONFLICT', 'This plan has reached its message limit; start a new plan');
+        }
+        await this.checkRateLimit(manager, user.id);
+        history.push(
+          await manager.save(
+            manager.create(AiMessage, { conversationId: conversation.id, role: 'user', text: message, draft: null, attempts: 1 }),
+          ),
+        );
       }
-      await this.checkRateLimit(user.id);
-      history.push(
-        await this.messages.save(this.messages.create({ conversationId: conversation.id, role: 'user', text: message, draft: null })),
-      );
       // Keeps the conversation inside the rate-limit query window even if the reply fails.
-      await this.conversations.update({ id: conversation.id }, { updatedAt: new Date() });
-    }
+      await manager.update(AiConversation, { id: conversation.id }, { updatedAt: new Date() });
+      return history;
+    });
     return this.reply(conversation, locale, history);
   }
 
@@ -226,7 +273,7 @@ export class AiService {
     if (!affected) throw new ConfirmRaceError();
   }
 
-  /** Inserts verified places the trip doesn't have yet (one per Google place). */
+  /** Inserts verified places the trip doesn't have yet (one per Google place), under Google's name. */
   private async insertPlaces(manager: EntityManager, tripId: string, userId: string, places: DraftPlace[]): Promise<void> {
     const existing = await manager.find(TripPlace, { where: { tripId } });
     const seen = new Set(existing.map((p) => p.googlePlaceId));
@@ -237,7 +284,7 @@ export class AiService {
       await manager.insert(TripPlace, {
         tripId,
         googlePlaceId: place.googlePlaceId,
-        name: draftPlace.name,
+        name: (place.name || draftPlace.name).slice(0, 200),
         category: draftPlace.category,
         day: draftPlace.day,
         notes: draftPlace.why || null,
@@ -254,25 +301,34 @@ export class AiService {
   }
 
   /**
-   * Per user: 30 messages per rolling hour and 150 per rolling 24 h, counted from stored user
-   * messages. Retry-After is when the oldest message that counts leaves the window.
+   * Per user: 30 provider attempts per rolling hour and 150 per rolling 24 h, counted from user
+   * messages (`attempts` each). Retry-After is when enough old attempts leave the window to get
+   * under the limit. Call under `lockUser`, in the transaction that then writes the message.
    */
-  private async checkRateLimit(userId: string): Promise<void> {
+  private async checkRateLimit(manager: EntityManager, userId: string): Promise<void> {
     const now = Date.now();
     const since = new Date(now - Math.max(...RATE_LIMITS.map((l) => l.windowMs)));
     // A user message bumps its conversation's updatedAt, so older conversations can't hold any.
-    const recent = await this.conversations.find({ where: { userId, updatedAt: MoreThanOrEqual(since) } });
+    const recent = await manager.find(AiConversation, { where: { userId, updatedAt: MoreThanOrEqual(since) } });
     if (recent.length === 0) return;
-    const sent = await this.messages.find({
+    const sent = await manager.find(AiMessage, {
       where: { conversationId: In(recent.map((c) => c.id)), role: 'user', createdAt: MoreThanOrEqual(since) },
       order: { createdAt: 'ASC' },
     });
     for (const { windowMs, max } of RATE_LIMITS) {
       const inWindow = sent.filter((m) => new Date(m.createdAt).getTime() >= now - windowMs);
-      if (inWindow.length < max) continue;
-      const oldestCounted = new Date(inWindow[inWindow.length - max].createdAt).getTime();
+      let remaining = inWindow.reduce((sum, m) => sum + m.attempts, 0);
+      if (remaining < max) continue;
+      let freeAt = now + windowMs;
+      for (const m of inWindow) {
+        remaining -= m.attempts;
+        if (remaining < max) {
+          freeAt = new Date(m.createdAt).getTime() + windowMs;
+          break;
+        }
+      }
       throw new AppError('RATE_LIMITED', 'Too many messages to the trip planner. Please wait a little.', undefined, {
-        retryAfterSeconds: (oldestCounted + windowMs - now) / 1000,
+        retryAfterSeconds: (freeAt - now) / 1000,
       });
     }
   }

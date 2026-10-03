@@ -95,6 +95,7 @@ export class PlacesVerifier {
       verified: true,
       place: {
         googlePlaceId: match.googlePlaceId,
+        name: match.name,
         address: match.address,
         lat: match.location.lat,
         lng: match.location.lng,
