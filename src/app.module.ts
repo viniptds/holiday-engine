@@ -10,6 +10,7 @@ import { EventsModule } from './events/events.module.js';
 import { SuggestionsModule } from './suggestions/suggestions.module.js';
 import { UsersModule } from './users/users.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { devLoginModule } from './auth/dev-auth.module.js';
 import { AppTripsModule } from './app-trips/app-trips.module.js';
 import { MembersModule } from './members/members.module.js';
 import { databaseConfig } from './database/database.config.js';
@@ -37,6 +38,8 @@ import { databaseConfig } from './database/database.config.js';
     SuggestionsModule,
     UsersModule,
     AuthModule,
+    // DEV ONLY: POST /app/v1/auth/dev, registered only with DEV_LOGIN_ENABLED=true outside production.
+    devLoginModule(),
     AppTripsModule,
     MembersModule,
   ],

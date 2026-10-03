@@ -29,6 +29,22 @@ export class AuthService {
     return this.session(user, token);
   }
 
+  /**
+   * DEV ONLY (`POST /auth/dev`): signs in as the user with googleSub `dev:<email>`, created on first
+   * use (display name defaults to the email's local part). Same sessions as Google sign-in.
+   */
+  async signInWithDevLogin(email: string, displayName?: string): Promise<AuthSession> {
+    const normalized = email.trim().toLowerCase();
+    const user = await this.users.findOrCreateFromGoogle({
+      sub: `dev:${normalized}`,
+      email: normalized,
+      name: displayName ?? null,
+      picture: null,
+    });
+    const { token } = await this.refreshTokens.issue(user.id);
+    return this.session(user, token);
+  }
+
   async refresh(refreshToken: string): Promise<AuthSession> {
     const { userId, token } = await this.refreshTokens.rotate(refreshToken);
     const user = await this.users.findActive(userId);

@@ -12,6 +12,9 @@ import { AuthService } from './auth.service.js';
 import { AuthGuard } from './auth.guard.js';
 import { AuthController } from './auth.controller.js';
 import { MeController } from './me.controller.js';
+import { assertDevLoginAllowed } from './dev-login.js';
+
+const DEV_LOGIN_CHECK = Symbol('DEV_LOGIN_CHECK');
 
 /**
  * Google sign-in, sessions and the `/me` profile. Exports `AuthGuard` (with what it needs, so a
@@ -34,7 +37,23 @@ import { MeController } from './me.controller.js';
     }),
   ],
   controllers: [AuthController, MeController],
-  providers: [GoogleTokenVerifier, AccessTokenService, RefreshTokenService, AuthService, AuthGuard],
-  exports: [AuthGuard, AccessTokenService, UsersModule],
+  providers: [
+    GoogleTokenVerifier,
+    AccessTokenService,
+    RefreshTokenService,
+    AuthService,
+    AuthGuard,
+    {
+      // Startup fails if the dev login (DevAuthModule) is switched on in production.
+      provide: DEV_LOGIN_CHECK,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) =>
+        assertDevLoginAllowed({
+          DEV_LOGIN_ENABLED: config.get<string>('DEV_LOGIN_ENABLED'),
+          NODE_ENV: config.get<string>('NODE_ENV'),
+        }),
+    },
+  ],
+  exports: [AuthGuard, AccessTokenService, AuthService, UsersModule],
 })
 export class AuthModule {}
