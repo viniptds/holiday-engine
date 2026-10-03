@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UseFilters, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, UseFilters, UseGuards } from '@nestjs/common';
 import { APP_PREFIX } from '../app-common/auth-user.js';
 import type { AuthUser } from '../app-common/auth-user.js';
 import { AppExceptionFilter } from '../app-common/app-exception.filter.js';
@@ -8,7 +8,7 @@ import { CurrentUser } from '../auth/current-user.decorator.js';
 import { AppTripDto } from '../app-trips/app-trips.types.js';
 import { InvitesService } from './invites.service.js';
 import { CreateInviteDto } from './dto/create-invite.dto.js';
-import { InviteDto, InvitePreviewDto } from './members.types.js';
+import { InviteDto, InvitePreviewDto, InviteSummaryDto } from './members.types.js';
 
 @Controller(APP_PREFIX)
 @UseFilters(AppExceptionFilter)
@@ -24,6 +24,17 @@ export class InvitesController {
     @Body(appValidationPipe) body: CreateInviteDto,
   ): Promise<InviteDto> {
     return this.invites.create(user, tripId, body);
+  }
+
+  @Get('trips/:id/invites')
+  async list(@CurrentUser() user: AuthUser, @Param('id') tripId: string): Promise<{ invites: InviteSummaryDto[] }> {
+    return { invites: await this.invites.list(user, tripId) };
+  }
+
+  @Delete('trips/:id/invites/:inviteId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async revoke(@CurrentUser() user: AuthUser, @Param('id') tripId: string, @Param('inviteId') inviteId: string): Promise<void> {
+    await this.invites.revoke(user, tripId, inviteId);
   }
 
   @Get('invites/:token')

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -12,7 +12,7 @@ import { AuthService } from './auth.service.js';
 import { AuthGuard } from './auth.guard.js';
 import { AuthController } from './auth.controller.js';
 import { MeController } from './me.controller.js';
-import { assertDevLoginAllowed } from './dev-login.js';
+import { assertDevLoginAllowed, DEV_LOGIN_NODE_ENVS, isDevLoginIgnored } from './dev-login.js';
 
 const DEV_LOGIN_CHECK = Symbol('DEV_LOGIN_CHECK');
 
@@ -44,14 +44,19 @@ const DEV_LOGIN_CHECK = Symbol('DEV_LOGIN_CHECK');
     AuthService,
     AuthGuard,
     {
-      // Startup fails if the dev login (DevAuthModule) is switched on in production.
+      // Startup fails if the dev login (DevAuthModule) is switched on in production, and warns when it's ignored.
       provide: DEV_LOGIN_CHECK,
       inject: [ConfigService],
-      useFactory: (config: ConfigService) =>
-        assertDevLoginAllowed({
-          DEV_LOGIN_ENABLED: config.get<string>('DEV_LOGIN_ENABLED'),
-          NODE_ENV: config.get<string>('NODE_ENV'),
-        }),
+      useFactory: (config: ConfigService) => {
+        const env = { DEV_LOGIN_ENABLED: config.get<string>('DEV_LOGIN_ENABLED'), NODE_ENV: config.get<string>('NODE_ENV') };
+        assertDevLoginAllowed(env);
+        if (isDevLoginIgnored(env)) {
+          new Logger(AuthModule.name).warn(
+            `DEV_LOGIN_ENABLED=true is ignored: the dev login needs NODE_ENV=${DEV_LOGIN_NODE_ENVS.join(' or ')} ` +
+              `(NODE_ENV is ${env.NODE_ENV ? `"${env.NODE_ENV}"` : 'unset'}).`,
+          );
+        }
+      },
     },
   ],
   exports: [AuthGuard, AccessTokenService, AuthService, UsersModule],

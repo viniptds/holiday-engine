@@ -22,12 +22,14 @@ const FKS: [string, string, string, string][] = [
 ];
 
 describe('AddUserForeignKeys1760190000000', () => {
-  it('runs last, after the users and every app-table migration', () => {
+  it('runs after the users migration and every app-table migration it constrains', () => {
     const names = migrations.map((m) => m.name);
+    const at = names.indexOf('AddUserForeignKeys1760190000000');
 
-    expect(names.at(-1)).toBe('AddUserForeignKeys1760190000000');
+    expect(at).toBeGreaterThan(-1);
     for (const before of ['CreateUsers1760000000000', 'AppTrips1760100000000', 'CreateTripInvites1760186400000']) {
-      expect(names).toContain(before);
+      expect(names.indexOf(before)).toBeGreaterThan(-1);
+      expect(names.indexOf(before)).toBeLessThan(at);
     }
   });
 

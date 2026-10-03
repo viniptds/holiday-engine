@@ -6,6 +6,7 @@ import { AppTripsModule } from '../app-trips/app-trips.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { UserDeletionHooks } from '../users/user-deletion-hooks.js';
 import { TripInvite } from './trip-invite.entity.js';
+import { TripRemoval } from './trip-removal.entity.js';
 import { MembersController } from './members.controller.js';
 import { InvitesController } from './invites.controller.js';
 import { MembersService } from './members.service.js';
@@ -13,7 +14,7 @@ import { InvitesService } from './invites.service.js';
 import { INVITE_MAILER, LoggingInviteMailer } from './invite-mailer.js';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Trip, TripMember, TripInvite]), AuthModule, AppTripsModule],
+  imports: [TypeOrmModule.forFeature([Trip, TripMember, TripInvite, TripRemoval]), AuthModule, AppTripsModule],
   controllers: [MembersController, InvitesController],
   providers: [MembersService, InvitesService, { provide: INVITE_MAILER, useClass: LoggingInviteMailer }],
   exports: [MembersService],

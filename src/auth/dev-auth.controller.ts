@@ -6,7 +6,7 @@ import { AuthService } from './auth.service.js';
 import type { AuthSession } from './auth.service.js';
 import { DevLoginDto } from './dto/dev-login.dto.js';
 
-/** DEV ONLY (`DEV_LOGIN_ENABLED=true`, never in production): only registered through `DevAuthModule`. */
+/** DEV ONLY (`DEV_LOGIN_ENABLED=true` with NODE_ENV development or test): only registered through `DevAuthModule`. */
 @Controller(`${APP_PREFIX}/auth`)
 @UseFilters(AppExceptionFilter)
 @UsePipes(appValidationPipe)

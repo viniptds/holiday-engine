@@ -1,9 +1,15 @@
 /**
  * TEST ONLY (excluded from the build): a small in-memory stand-in for the TypeORM repository and
  * EntityManager calls the app services make. It supports equality and the FindOperators we use
- * (In, IsNull, Not, MoreThan, LessThan and the OrEqual variants), primary/unique keys (a violation
- * throws `{ code: '23505' }` like Postgres), ON DELETE CASCADE, many-to-one relations, ordering,
- * and transactions that roll back only their own changes, so concurrent transactions can interleave.
+ * (In, IsNull, Not, MoreThan, LessThan and the OrEqual variants), primary/unique keys, including
+ * partial ones (a violation, on insert or update, throws `{ code: '23505' }` like Postgres), ON DELETE
+ * CASCADE, many-to-one relations, ordering, and transactions that roll back only their own changes, so
+ * concurrent transactions can interleave.
+ *
+ * Row locks work like Postgres under READ COMMITTED: `find` with `lock`, `update`, `delete` and `save`
+ * lock the rows they match until the transaction ends (a statement outside a transaction holds them
+ * only for itself). A transaction that waits for another one re-checks each row against its
+ * conditions once it gets the lock, and a lock cycle throws a deadlock error (`40P01`).
  */
 import { randomUUID } from 'node:crypto';
 import { FindOperator } from 'typeorm';
@@ -13,9 +19,12 @@ type EntityClass<T = object> = new () => T;
 type Where = Row | Row[];
 type FindOptions = { where?: Where; order?: Row; relations?: Record<string, boolean>; take?: number; lock?: unknown };
 
+/** A unique key: columns, optionally only over rows matching `where` (a partial unique index). */
+export type UniqueKey = string[] | { name: string; columns: string[]; where: (row: Row) => boolean };
+
 export type TableSpec = {
   primary: string[];
-  unique?: string[][];
+  unique?: UniqueKey[];
   /** Values the database would generate on insert (ids, defaults, create dates). */
   generate?: () => Row;
   /** Column refreshed on every save/update, like `@UpdateDateColumn`. */
@@ -29,8 +38,29 @@ export type TableSpec = {
 type Table = { entity: EntityClass; spec: TableSpec; rows: Row[] };
 type Undo = () => void;
 
+/** A transaction, or a single statement outside one: owns row locks until `end()`. */
+class Txn {
+  readonly undo: Undo[] = [];
+  waitingFor?: Txn;
+  private finish!: () => void;
+  readonly done = new Promise<void>((resolve) => (this.finish = resolve));
+  end() {
+    this.finish();
+  }
+}
+
 export class UniqueViolationError extends Error {
   readonly code = '23505';
+  constructor(
+    message: string,
+    readonly constraint?: string,
+  ) {
+    super(message);
+  }
+}
+
+export class DeadlockError extends Error {
+  readonly code = '40P01';
 }
 
 /** Deep copy of row values (Dates, arrays, plain objects). Not `structuredClone`: under Jest it returns Dates of another realm. */
@@ -123,23 +153,41 @@ export class InMemoryDb {
   }
 
   async transaction<R>(work: (manager: ReturnType<InMemoryDb['manager']>) => Promise<R>): Promise<R> {
-    const undo: Undo[] = [];
+    const txn = new Txn();
     try {
-      return await work(this.manager(undo));
+      return await work(this.manager(txn));
     } catch (error) {
-      for (const step of undo.reverse()) step();
+      for (const step of txn.undo.reverse()) step();
       throw error;
+    } finally {
+      this.release(txn);
     }
   }
 
-  /** EntityManager-like API. With `undo`, changes are recorded so the transaction can roll back. */
-  manager(undo: Undo[] | null) {
+  /** EntityManager-like API. Inside a transaction (`txn`), changes are recorded so it can roll back. */
+  manager(txn: Txn | null) {
     const db = this;
+    /** Runs one statement: inside the transaction, or as its own (locks released right after). */
+    const statement = async <R>(work: (t: Txn) => Promise<R>): Promise<R> => {
+      if (txn) return work(txn);
+      const own = new Txn();
+      try {
+        return await work(own);
+      } finally {
+        db.release(own);
+      }
+    };
+    const undo = txn?.undo ?? null;
     return {
       create<T extends object>(entity: EntityClass<T>, data: Partial<T>): T {
         return Object.assign(new entity(), data);
       },
       async find<T extends object>(entity: EntityClass<T>, options: FindOptions = {}): Promise<T[]> {
+        if (options.lock !== undefined) {
+          // Like TypeORM: a pessimistic lock needs a transaction.
+          if (!txn) throw new Error('InMemoryDb: a pessimistic lock requires a transaction');
+          await db.lockMatching(db.table(entity), options.where, txn);
+        }
         const result = db.select(entity, options);
         await db.afterRead?.(entity);
         return result;
@@ -153,11 +201,15 @@ export class InMemoryDb {
       async save<T extends object>(value: T): Promise<T> {
         const entity = value.constructor as EntityClass<T>;
         const table = db.table(entity);
-        const existing = table.rows.find((r) => table.spec.primary.every((k) => k in value && same(r[k], (value as Row)[k])));
+        const byKey = (r: Row) => table.spec.primary.every((k) => k in value && same(r[k], (value as Row)[k]));
+        const existing = table.rows.find(byKey);
         if (existing) {
-          const changes = db.columns(table, value as Row);
-          db.updateRows(table, [existing], changes, undo);
-          return Object.assign(value, db.toEntity(entity, existing));
+          return statement(async (t) => {
+            await db.acquire(existing, t);
+            const changes = db.columns(table, value as Row);
+            db.updateRows(table, [existing], changes, undo);
+            return Object.assign(value, db.toEntity(entity, existing));
+          });
         }
         return Object.assign(value, db.insertRow(entity, value as Row, undo));
       },
@@ -167,27 +219,35 @@ export class InMemoryDb {
       },
       async update<T extends object>(entity: EntityClass<T>, where: Where, values: Partial<T>) {
         const table = db.table(entity);
-        const rows = table.rows.filter((r) => matches(r, where));
-        db.updateRows(table, rows, values as Row, undo);
-        return { affected: rows.length };
+        return statement(async (t) => {
+          const rows = await db.lockMatching(table, where, t);
+          db.updateRows(table, rows, values as Row, undo);
+          return { affected: rows.length };
+        });
       },
       async delete<T extends object>(entity: EntityClass<T>, where: Where) {
         const table = db.table(entity);
-        const rows = table.rows.filter((r) => matches(r, where));
-        for (const row of rows) db.deleteRow(table, row, undo);
-        return { affected: rows.length };
+        return statement(async (t) => {
+          const rows = await db.lockMatching(table, where, t);
+          for (const row of rows) db.deleteRow(table, row, undo);
+          return { affected: rows.length };
+        });
       },
       async softDelete<T extends object>(entity: EntityClass<T>, where: Where) {
         const table = db.table(entity);
         const column = table.spec.deleteDate;
         if (!column) throw new Error(`InMemoryDb: ${entity.name} has no deleteDate`);
-        const rows = table.rows.filter((r) => r[column] == null && matches(r, where));
-        db.updateRows(table, rows, { [column]: new Date() }, undo);
-        return { affected: rows.length };
+        return statement(async (t) => {
+          const rows = (await db.lockMatching(table, where, t)).filter((r) => r[column] == null);
+          db.updateRows(table, rows, { [column]: new Date() }, undo);
+          return { affected: rows.length };
+        });
       },
       getRepository<T extends object>(entity: EntityClass<T>) {
         const m = this;
         return {
+          create: (data: Partial<T>) => m.create(entity, data),
+          save: (value: T) => m.save(value),
           find: (options: FindOptions = {}) => m.find(entity, options),
           findOne: (options: FindOptions) => m.findOne(entity, options),
           update: (where: Where, values: Partial<T>) => m.update(entity, where, values),
@@ -196,6 +256,57 @@ export class InMemoryDb {
         };
       },
     };
+  }
+
+  private readonly locks = new Map<Row, Txn>();
+
+  /**
+   * Locks every row matching `where` for `txn`, waiting for other holders, then re-checks each row
+   * (it may have changed or gone meanwhile) and returns those that still match.
+   */
+  private async lockMatching(table: Table, where: Where | undefined, txn: Txn): Promise<Row[]> {
+    const candidates = table.rows.filter((r) => matches(r, where));
+    for (const row of candidates) await this.acquire(row, txn);
+    return candidates.filter((r) => table.rows.includes(r) && matches(r, where));
+  }
+
+  private async acquire(row: Row, txn: Txn): Promise<void> {
+    for (;;) {
+      const holder = this.locks.get(row);
+      if (!holder || holder === txn) {
+        this.locks.set(row, txn);
+        return;
+      }
+      for (let t: Txn | undefined = holder; t; t = t.waitingFor) {
+        if (t === txn) throw new DeadlockError('deadlock detected');
+      }
+      txn.waitingFor = holder;
+      await holder.done;
+      txn.waitingFor = undefined;
+    }
+  }
+
+  private release(txn: Txn) {
+    for (const [row, holder] of this.locks) if (holder === txn) this.locks.delete(row);
+    txn.end();
+  }
+
+  /** Throws like Postgres if `row` collides with another row on a (possibly partial) unique key. */
+  private checkUnique(table: Table, row: Row) {
+    const keys: UniqueKey[] = [table.spec.primary, ...(table.spec.unique ?? [])];
+    for (const key of keys) {
+      const { columns, where, name } = Array.isArray(key) ? { columns: key, where: undefined, name: undefined } : key;
+      if (where && !where(row)) continue;
+      const clash = table.rows.some(
+        (r) => r !== row && (!where || where(r)) && columns.every((k) => same(r[k], row[k])),
+      );
+      if (clash) {
+        throw new UniqueViolationError(
+          `duplicate key value violates unique constraint ${name ?? ''} on ${table.entity.name} (${columns.join(', ')})`.replace('  ', ' '),
+          name,
+        );
+      }
+    }
   }
 
   private table(entity: EntityClass): Table {
@@ -247,11 +358,7 @@ export class InMemoryDb {
     this.beforeWrite?.('insert', entity);
     const table = this.table(entity);
     const row: Row = { ...table.spec.generate?.(), ...clone(this.columns(table, value)) };
-    for (const key of [table.spec.primary, ...(table.spec.unique ?? [])]) {
-      if (table.rows.some((r) => key.every((k) => same(r[k], row[k])))) {
-        throw new UniqueViolationError(`duplicate key value violates unique constraint on ${entity.name} (${key.join(', ')})`);
-      }
-    }
+    this.checkUnique(table, row);
     table.rows.push(row);
     undo?.push(() => {
       table.rows = table.rows.filter((r) => r !== row);
@@ -262,11 +369,21 @@ export class InMemoryDb {
   private updateRows(table: Table, rows: Row[], values: Row, undo: Undo[] | null) {
     this.beforeWrite?.('update', table.entity);
     const changes = { ...clone(values), ...(table.spec.updateDate ? { [table.spec.updateDate]: new Date() } : {}) };
-    for (const row of rows) {
-      const before = Object.fromEntries(Object.keys(changes).map((k) => [k, row[k]]));
-      Object.assign(row, changes);
-      undo?.push(() => Object.assign(row, before));
+    const applied: [Row, Row][] = [];
+    try {
+      for (const row of rows) {
+        const before = Object.fromEntries(Object.keys(changes).map((k) => [k, row[k]]));
+        Object.assign(row, changes);
+        applied.push([row, before]);
+        // Checked row by row, like a non-deferrable unique index.
+        this.checkUnique(table, row);
+      }
+    } catch (error) {
+      // The statement fails as a whole.
+      for (const [row, before] of applied.reverse()) Object.assign(row, before);
+      throw error;
     }
+    for (const [row, before] of applied) undo?.push(() => Object.assign(row, before));
   }
 
   private deleteRow(table: Table, row: Row, undo: Undo[] | null) {

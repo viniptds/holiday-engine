@@ -2,14 +2,17 @@ import { createHash, randomBytes } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, MoreThan, Repository } from 'typeorm';
+import { isUUID } from 'class-validator';
+import { In, IsNull, MoreThan, Repository } from 'typeorm';
 import { AppError } from '../app-common/app-error.js';
 import { USER_DIRECTORY } from '../app-common/auth-user.js';
 import type { AuthUser, UserDirectory } from '../app-common/auth-user.js';
 import { TripMember } from '../app-trips/trip-member.entity.js';
+import { toMemberSummary } from '../app-trips/app-trip.mapper.js';
 import { AppTripsService } from '../app-trips/app-trips.service.js';
 import type { AppTripDto } from '../app-trips/app-trips.types.js';
 import { TripInvite } from './trip-invite.entity.js';
+import { TripRemoval } from './trip-removal.entity.js';
 import { INVITE_MAILER } from './invite-mailer.js';
 import type { InviteMailer } from './invite-mailer.js';
 import { CreateInviteDto } from './dto/create-invite.dto.js';
@@ -20,6 +23,7 @@ import {
   INVITE_TTL_DAYS,
   InviteDto,
   InvitePreviewDto,
+  InviteSummaryDto,
 } from './members.types.js';
 
 // 32 random bytes in base64url, as `newToken` makes them.
@@ -52,6 +56,7 @@ export class InvitesService {
 
   constructor(
     @InjectRepository(TripInvite) private readonly invites: Repository<TripInvite>,
+    @InjectRepository(TripMember) private readonly memberships: Repository<TripMember>,
     private readonly appTrips: AppTripsService,
     @Inject(USER_DIRECTORY) private readonly users: UserDirectory,
     @Inject(INVITE_MAILER) private readonly mailer: InviteMailer,
@@ -108,6 +113,65 @@ export class InvitesService {
     return dto;
   }
 
+  /**
+   * Pending invites (unused, unrevoked, unexpired), newest first. Owners see all of them,
+   * editors only their own; viewers get FORBIDDEN.
+   */
+  async list(user: AuthUser, tripId: string): Promise<InviteSummaryDto[]> {
+    const { role } = await this.appTrips.requireMembership(user, tripId, ['owner', 'editor']);
+    const invites = await this.invites.find({
+      where: {
+        tripId,
+        revokedAt: IsNull(),
+        acceptedAt: IsNull(),
+        expiresAt: MoreThan(new Date()),
+        ...(role === 'owner' ? {} : { createdBy: user.id }),
+      },
+      order: { createdAt: 'DESC', id: 'ASC' },
+    });
+
+    const creatorIds = [...new Set(invites.map((i) => i.createdBy))];
+    const [creators, profiles] = await Promise.all([
+      creatorIds.length ? this.memberships.find({ where: { tripId, userId: In(creatorIds) } }) : Promise.resolve([]),
+      this.users.getProfiles(creatorIds),
+    ]);
+    const roleOf = new Map(creators.map((m) => [m.userId, m.role]));
+
+    return invites.map((invite) => ({
+      id: invite.id,
+      email: invite.email,
+      role: invite.role,
+      // A creator who left, was removed or demoted had their invites revoked, so they're a member;
+      // `viewer` only keeps the shape valid if that ever isn't so.
+      createdBy: toMemberSummary(
+        { userId: invite.createdBy, role: roleOf.get(invite.createdBy) ?? 'viewer' } as TripMember,
+        profiles.get(invite.createdBy),
+      ),
+      expiresAt: new Date(invite.expiresAt).toISOString(),
+      createdAt: new Date(invite.createdAt).toISOString(),
+    }));
+  }
+
+  /**
+   * Revokes an active invite (unused, unrevoked, unexpired) of the trip: owners any, editors only
+   * their own (FORBIDDEN otherwise). Anything else (used, revoked, expired, unknown, or another
+   * trip's) is NOT_FOUND, like the listing, so revoking twice is a 404. The role check comes first.
+   */
+  async revoke(user: AuthUser, tripId: string, inviteId: string): Promise<void> {
+    const { role } = await this.appTrips.requireMembership(user, tripId, ['owner', 'editor']);
+    if (!isUUID(inviteId, '4')) throw inviteNotFound();
+    const active = { id: inviteId.toLowerCase(), tripId, revokedAt: IsNull(), acceptedAt: IsNull() };
+    const now = new Date();
+    const invite = await this.invites.findOne({ where: { ...active, expiresAt: MoreThan(now) } });
+    if (!invite) throw inviteNotFound();
+    if (role !== 'owner' && invite.createdBy !== user.id) {
+      throw new AppError('FORBIDDEN', 'Editors can only revoke their own invites');
+    }
+    // Conditional, so of two concurrent revokes (or a revoke racing an accept) only one wins.
+    const { affected } = await this.invites.update({ ...active, expiresAt: MoreThan(now) }, { revokedAt: now });
+    if (affected !== 1) throw inviteNotFound();
+  }
+
   /** Any signed-in user holding a usable token. */
   async preview(token: string): Promise<InvitePreviewDto> {
     const invite = await this.findUsable(token);
@@ -126,8 +190,10 @@ export class InvitesService {
   /**
    * Joins the trip with the invite's role and returns it. An existing member gets the trip
    * unchanged (the invite isn't used up). An email invite only works for the account with that
-   * email (FORBIDDEN otherwise, invite left unused) and is claimed with a conditional update
-   * inside the transaction, so two concurrent accepts can't both use it.
+   * email, and never for a dev-login account, whose email is unverified (FORBIDDEN otherwise,
+   * invite left unused); it's claimed with a conditional update inside the transaction, so two
+   * concurrent accepts can't both use it. Someone the owner removed can't rejoin through a link
+   * invite (FORBIDDEN); accepting an email invite to them created after the removal lifts that.
    */
   async accept(user: AuthUser, token: string): Promise<AppTripDto> {
     const now = new Date();
@@ -140,9 +206,19 @@ export class InvitesService {
 
         if (invite.email !== null) {
           // Email invites are only for the account with that email; a mismatch leaves the invite usable.
+          if (user.devAccount) {
+            throw new AppError('FORBIDDEN', "Test accounts can't accept email invites; use a link invite");
+          }
           if (normalizeEmail(invite.email) !== normalizeEmail(user.email)) {
             throw new AppError('FORBIDDEN', 'This invite is for a different account');
           }
+        }
+
+        const removal = await manager.findOne(TripRemoval, { where: membership });
+        const liftsRemoval = removal && invite.email !== null && new Date(invite.createdAt) > new Date(removal.removedAt);
+        if (removal && !liftsRemoval) throw new AppError('FORBIDDEN', 'You were removed from this trip');
+
+        if (invite.email !== null) {
           const { affected } = await manager.update(
             TripInvite,
             { id: invite.id, acceptedAt: IsNull(), revokedAt: IsNull(), expiresAt: MoreThan(now) },
@@ -155,6 +231,7 @@ export class InvitesService {
           }
         }
         await manager.insert(TripMember, { ...membership, role: invite.role });
+        if (removal) await manager.delete(TripRemoval, membership);
         return invite.tripId;
       });
     } catch (error) {

@@ -5,6 +5,8 @@ import { CreateRefreshTokens1760000100000 } from './1760000100000-create-refresh
 import { AppTrips1760100000000 } from './1760100000000-app-trips.js';
 import { CreateTripInvites1760186400000 } from './1760186400000-create-trip-invites.js';
 import { AddUserForeignKeys1760190000000 } from './1760190000000-add-user-foreign-keys.js';
+import { CreateTripRemovals1760200000000 } from './1760200000000-create-trip-removals.js';
+import { OneOwnerPerTrip1760200100000 } from './1760200100000-one-owner-per-trip.js';
 
 // Register every migration here, in order.
 export const migrations = [
@@ -15,4 +17,6 @@ export const migrations = [
   AppTrips1760100000000,
   CreateTripInvites1760186400000,
   AddUserForeignKeys1760190000000,
+  CreateTripRemovals1760200000000,
+  OneOwnerPerTrip1760200100000,
 ];
