@@ -13,6 +13,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { devLoginModule } from './auth/dev-auth.module.js';
 import { AppTripsModule } from './app-trips/app-trips.module.js';
 import { MembersModule } from './members/members.module.js';
+import { AiModule } from './ai/ai.module.js';
 import { databaseConfig } from './database/database.config.js';
 
 @Module({
@@ -42,6 +43,7 @@ import { databaseConfig } from './database/database.config.js';
     devLoginModule(),
     AppTripsModule,
     MembersModule,
+    AiModule,
   ],
   controllers: [AppController],
 })
