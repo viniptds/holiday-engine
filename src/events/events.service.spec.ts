@@ -70,6 +70,23 @@ describe('EventsService', () => {
     );
   });
 
+  it('caps a future trip at 30 days past its startDate', async () => {
+    await service.suggestForRequest({ ...trip, endDate: '2027-06-30' }, new Date('2026-10-03T08:00:00.000Z'));
+
+    expect(search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: new Date('2026-11-10T00:00:00.000Z'),
+        to: new Date('2026-12-10T23:59:59.999Z'),
+      }),
+    );
+  });
+
+  it('uses the trip end when it comes before the 30-day cap', async () => {
+    await service.suggestForRequest({ ...trip, endDate: '2026-12-09' }, new Date('2026-10-03T08:00:00.000Z'));
+
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ to: new Date('2026-12-09T23:59:59.999Z') }));
+  });
+
   it('returns nothing without searching once the trip has ended', async () => {
     const events = await service.suggestForRequest(trip, new Date('2026-11-16T00:00:00.000Z'));
 

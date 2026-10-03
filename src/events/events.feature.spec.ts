@@ -107,19 +107,14 @@ describe('Event suggestions (feature)', () => {
       expect(store.sent.size).toBe(events.length);
     });
 
-    // Superseded by the BUG-009 rule: the mock has 6 events today+tomorrow, so a re-run correctly sends the 6th.
-    it.skip('suggests nothing new when re-run the same day', async () => {
-      await service.suggestScheduled(trip, day);
-
-      expect(await service.suggestScheduled(trip, day)).toEqual([]);
-    });
-
     it('sends what is left on a same-day re-run, then nothing', async () => {
       const first = await service.suggestScheduled(trip, day);
       const second = await service.suggestScheduled(trip, day);
 
       expect(first).toHaveLength(5);
-      expect(second.map((e) => e.externalId)).not.toEqual(expect.arrayContaining(first.map((e) => e.externalId)));
+      const firstIds = new Set(first.map((e) => e.externalId));
+      expect(second.length).toBeGreaterThan(0);
+      expect(second.filter((e) => firstIds.has(e.externalId))).toEqual([]);
       expect(store.sent.size).toBe(first.length + second.length);
       expect(await service.suggestScheduled(trip, day)).toEqual([]);
     });

@@ -119,6 +119,24 @@ describe('TripsService', () => {
     expect(repo.save).not.toHaveBeenCalled();
   });
 
+  it('rejects an update that moves only startDate more than 365 days before the stored endDate', async () => {
+    repo.findOneBy.mockResolvedValueOnce(makeTrip());
+
+    await expect(service.update(owner, { tripId: TRIP_ID, startDate: '2025-11-04' })).rejects.toThrow(
+      'endDate must be at most 365 days after startDate',
+    );
+    expect(repo.save).not.toHaveBeenCalled();
+  });
+
+  it('allows an update that makes the stored trip exactly 365 days long', async () => {
+    repo.findOneBy.mockResolvedValueOnce(makeTrip());
+
+    await expect(service.update(owner, { tripId: TRIP_ID, startDate: '2025-11-05' })).resolves.toMatchObject({
+      startDate: '2025-11-05',
+      endDate: '2026-11-05',
+    });
+  });
+
   // BUG-006: only v4 UUIDs reach the database.
   it('throws TripNotFoundError for the nil UUID without querying', async () => {
     await expect(service.getForChat(owner, '00000000-0000-0000-0000-000000000000')).rejects.toBeInstanceOf(

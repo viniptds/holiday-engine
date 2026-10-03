@@ -171,6 +171,24 @@ describe('contract rules added with Task D', () => {
     ).toEqual(['endDate']);
   });
 
+  it('counts the 365-day cap in calendar days across a leap day', async () => {
+    // 2028 is a leap year: 2027-03-01 -> 2028-03-01 is 366 days.
+    expect(await failedProps(CreateTripDto, { ...valid, startDate: '2027-03-01', endDate: '2028-02-29' })).toEqual([]);
+    expect(await failedProps(CreateTripDto, { ...valid, startDate: '2027-03-01', endDate: '2028-03-01' })).toEqual([
+      'endDate',
+    ]);
+    expect(await failedProps(CreateTripDto, { ...valid, startDate: '2028-01-01', endDate: '2028-12-31' })).toEqual([]);
+  });
+
+  it('applies the cap to an update that sends both dates', async () => {
+    expect(
+      await failedProps(UpdateTripDto, { tripId: TRIP_ID, startDate: '2026-01-01', endDate: '2027-01-01' }),
+    ).toEqual([]);
+    expect(
+      await failedProps(UpdateTripDto, { tripId: TRIP_ID, startDate: '2026-01-01', endDate: '2027-01-02' }),
+    ).toEqual(['endDate']);
+  });
+
   it('explains which date rule failed', async () => {
     const [tooLong] = await validate(plainToInstance(CreateTripDto, { ...valid, endDate: '2028-01-01' }));
     const [reversed] = await validate(plainToInstance(CreateTripDto, { ...valid, endDate: '2026-10-01' }));
