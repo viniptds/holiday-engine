@@ -68,11 +68,13 @@ describe('Members and invites API (feature)', () => {
     sendInvite.mockClear();
   });
 
-  const call = (method: string, path: string, user: string | null, body?: unknown) =>
+  /** Each user's account email is `<first 4 chars of id>@example.com` unless `email` is given. */
+  const emailOf = (user: string) => `${user.slice(0, 4)}@example.com`;
+  const call = (method: string, path: string, user: string | null, body?: unknown, email?: string) =>
     fetch(`${baseUrl}${path}`, {
       method,
       headers: {
-        ...(user ? { 'x-dev-user-id': user, 'x-dev-user-email': `${user.slice(0, 4)}@example.com` } : {}),
+        ...(user ? { 'x-dev-user-id': user, 'x-dev-user-email': email ?? emailOf(user) } : {}),
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -305,6 +307,52 @@ describe('Members and invites API (feature)', () => {
       expect(roleOf(id, EDITOR)).toBeUndefined();
     });
 
+    describe('revoking the departing member\'s invites', () => {
+      const pendingOf = (token: string) => db.all(TripInvite, { tokenHash: hashToken(token) })[0].revokedAt === null;
+
+      it.each([
+        ['leaves', EDITOR, 'me'],
+        ['is removed', OWNER, EDITOR],
+      ])('revokes their unused invites for the trip when the member %s', async (_label, caller, target) => {
+        const id = seedTrip();
+        const other = seedTrip(OTHER, [[EDITOR, 'editor']]);
+        const link = seedInvite(id, { createdBy: EDITOR });
+        const email = seedInvite(id, { createdBy: EDITOR, email: 'ana@example.com' });
+        const used = seedInvite(id, { createdBy: EDITOR, email: 'bob@example.com', acceptedBy: NEWCOMER, acceptedAt: new Date() });
+        const ownersInvite = seedInvite(id, { createdBy: OWNER });
+        const otherTrip = seedInvite(other, { createdBy: EDITOR });
+
+        const res = await call('DELETE', `/trips/${id}/members/${target}`, caller);
+
+        expect(res.status).toBe(204);
+        expect([pendingOf(link), pendingOf(email)]).toEqual([false, false]);
+        expect([pendingOf(used), pendingOf(ownersInvite), pendingOf(otherTrip)]).toEqual([true, true, true]);
+        expect((await call('POST', `/invites/${link}/accept`, NEWCOMER)).status).toBe(404);
+        expect((await call('POST', `/invites/${ownersInvite}/accept`, NEWCOMER)).status).toBe(200);
+      });
+
+      it('keeps the membership and the invites when the revocation fails', async () => {
+        const id = seedTrip();
+        const link = seedInvite(id, { createdBy: EDITOR });
+        db.beforeWrite = (operation, entity) => {
+          if (operation === 'update' && entity === TripInvite) throw new Error('db down');
+        };
+
+        expect((await call('DELETE', `/trips/${id}/members/me`, EDITOR)).status).toBe(500);
+        expect(roleOf(id, EDITOR)).toBe('editor');
+        expect(pendingOf(link)).toBe(true);
+      });
+
+      it('revokes nothing on an ownership transfer', async () => {
+        const id = seedTrip();
+        const ownersInvite = seedInvite(id, { createdBy: OWNER });
+        const editorsInvite = seedInvite(id, { createdBy: EDITOR });
+
+        expect((await call('PATCH', `/trips/${id}/members/${EDITOR}`, OWNER, { role: 'owner' })).status).toBe(200);
+        expect([pendingOf(ownersInvite), pendingOf(editorsInvite)]).toEqual([true, true]);
+      });
+    });
+
     it('is 404 for a member that is not on the trip', async () => {
       const id = seedTrip();
 
@@ -492,10 +540,11 @@ describe('Members and invites API (feature)', () => {
 
     it('uses an email invite once', async () => {
       const id = seedTrip();
-      const token = seedInvite(id, { email: 'ana@example.com' });
+      const token = seedInvite(id, { email: emailOf(NEWCOMER) });
 
       const first = await call('POST', `/invites/${token}/accept`, NEWCOMER);
-      const second = await call('POST', `/invites/${token}/accept`, OUTSIDER);
+      // Even an account with the same email can't reuse it.
+      const second = await call('POST', `/invites/${token}/accept`, OUTSIDER, undefined, emailOf(NEWCOMER));
 
       expect(first.status).toBe(200);
       expect(second.status).toBe(404);
@@ -503,18 +552,53 @@ describe('Members and invites API (feature)', () => {
       expect(db.all(TripInvite)[0]).toMatchObject({ acceptedBy: NEWCOMER, acceptedAt: expect.any(Date) });
     });
 
+    it('refuses an email invite to another account without using it up', async () => {
+      const id = seedTrip();
+      const token = seedInvite(id, { email: 'ana@example.com', role: 'viewer' });
+
+      const wrong = await call('POST', `/invites/${token}/accept`, OUTSIDER);
+
+      expect(wrong.status).toBe(403);
+      expect(await wrong.json()).toEqual({ code: 'FORBIDDEN', message: 'This invite is for a different account' });
+      expect(roleOf(id, OUTSIDER)).toBeUndefined();
+      expect(db.all(TripInvite)[0]).toMatchObject({ acceptedBy: null, acceptedAt: null, revokedAt: null });
+      // The preview stays open to anyone, and the right account can still use the invite.
+      expect((await call('GET', `/invites/${token}`, OUTSIDER)).status).toBe(200);
+      const right = await call('POST', `/invites/${token}/accept`, NEWCOMER, undefined, 'ana@example.com');
+      expect(right.status).toBe(200);
+      expect(roleOf(id, NEWCOMER)).toBe('viewer');
+    });
+
+    it('matches the email case-insensitively and ignoring surrounding spaces', async () => {
+      const id = seedTrip();
+      const token = seedInvite(id, { email: 'ana@example.com' });
+
+      const res = await call('POST', `/invites/${token}/accept`, NEWCOMER, undefined, '  Ana@EXAMPLE.com ');
+
+      expect(res.status).toBe(200);
+      expect(db.all(TripInvite)[0].acceptedBy).toBe(NEWCOMER);
+    });
+
+    it('lets anyone use a link invite, whatever their email', async () => {
+      const id = seedTrip();
+      const token = seedInvite(id);
+
+      expect((await call('POST', `/invites/${token}/accept`, NEWCOMER, undefined, 'someone@else.org')).status).toBe(200);
+    });
+
     it('lets only one of two concurrent accepts use an email invite', async () => {
       const id = seedTrip();
       const token = seedInvite(id, { email: 'ana@example.com' });
-      // Both requests read the invite as unused before either claims it.
+      // Both requests read the invite as unused before either claims it. (Two accounts sharing an
+      // email can't happen with real auth; here it isolates the race from the email check.)
       const bothRead = barrier(2);
       db.afterRead = async (entity) => {
         if (entity === TripInvite) await bothRead();
       };
 
       const results = await Promise.all([
-        call('POST', `/invites/${token}/accept`, NEWCOMER),
-        call('POST', `/invites/${token}/accept`, OUTSIDER),
+        call('POST', `/invites/${token}/accept`, NEWCOMER, undefined, 'ana@example.com'),
+        call('POST', `/invites/${token}/accept`, OUTSIDER, undefined, 'ana@example.com'),
       ]);
 
       expect(results.map((r) => r.status).sort()).toEqual([200, 404]);

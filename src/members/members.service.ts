@@ -64,21 +64,27 @@ export class MembersService {
 
   /**
    * `me` (or the caller's own id) leaves; otherwise the owner removes a member. The owner can't
-   * leave or remove themselves (CONFLICT): they transfer ownership first.
+   * leave or remove themselves (CONFLICT): they transfer ownership first. The departing member's
+   * unused invites for the trip are revoked in the same transaction.
    */
   async remove(user: AuthUser, tripId: string, target: string): Promise<void> {
     const membership = await this.appTrips.requireMembership(user, tripId);
     const self = target === 'me' || target.toLowerCase() === user.id;
-    if (self) {
-      if (membership.role === 'owner') {
-        throw new AppError('CONFLICT', "The owner can't leave the trip; transfer ownership first");
-      }
-      await this.members.delete({ tripId, userId: user.id });
-      return;
+    if (self && membership.role === 'owner') {
+      throw new AppError('CONFLICT', "The owner can't leave the trip; transfer ownership first");
     }
-    if (membership.role !== 'owner') throw new AppError('FORBIDDEN', `A trip ${membership.role} can't do this`);
-    const { affected } = await this.members.delete({ tripId, userId: this.parseUserId(target) });
-    if (!affected) throw memberNotFound();
+    if (!self && membership.role !== 'owner') throw new AppError('FORBIDDEN', `A trip ${membership.role} can't do this`);
+    const userId = self ? user.id : this.parseUserId(target);
+
+    await this.members.manager.transaction(async (manager) => {
+      const { affected } = await manager.delete(TripMember, { tripId, userId });
+      if (!affected) throw memberNotFound();
+      await manager.update(
+        TripInvite,
+        { tripId, createdBy: userId, revokedAt: IsNull(), acceptedAt: IsNull() },
+        { revokedAt: new Date() },
+      );
+    });
   }
 
   /**

@@ -36,6 +36,8 @@ const isUsable = (invite: TripInvite, now: Date) =>
   new Date(invite.expiresAt).getTime() > now.getTime() &&
   (invite.email === null || invite.acceptedAt === null);
 
+const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
 const isUniqueViolation = (error: unknown) => (error as { code?: unknown })?.code === '23505';
 
 /**
@@ -123,7 +125,8 @@ export class InvitesService {
 
   /**
    * Joins the trip with the invite's role and returns it. An existing member gets the trip
-   * unchanged (the invite isn't used up). An email invite is claimed with a conditional update
+   * unchanged (the invite isn't used up). An email invite only works for the account with that
+   * email (FORBIDDEN otherwise, invite left unused) and is claimed with a conditional update
    * inside the transaction, so two concurrent accepts can't both use it.
    */
   async accept(user: AuthUser, token: string): Promise<AppTripDto> {
@@ -136,6 +139,10 @@ export class InvitesService {
         if (await manager.findOne(TripMember, { where: membership })) return invite.tripId;
 
         if (invite.email !== null) {
+          // Email invites are only for the account with that email; a mismatch leaves the invite usable.
+          if (normalizeEmail(invite.email) !== normalizeEmail(user.email)) {
+            throw new AppError('FORBIDDEN', 'This invite is for a different account');
+          }
           const { affected } = await manager.update(
             TripInvite,
             { id: invite.id, acceptedAt: IsNull(), revokedAt: IsNull(), expiresAt: MoreThan(now) },
