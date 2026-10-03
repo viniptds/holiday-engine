@@ -8,7 +8,9 @@ import { UserDeletionHooks } from '../users/user-deletion-hooks.js';
 import { AI_CONFIG, aiConfigFrom } from './ai.config.js';
 import type { AiConfig } from './ai.config.js';
 import { AiService } from './ai.service.js';
-import { AiConversationsController, TripPlacesController } from './ai.controller.js';
+import { AiConversationsController, TripItineraryController, TripPlacesController } from './ai.controller.js';
+import { ItineraryService } from './itinerary.service.js';
+import { TripScheduleHooks } from '../app-trips/trip-schedule-hooks.js';
 import { AiConversation } from './entities/ai-conversation.entity.js';
 import { AiMessage } from './entities/ai-message.entity.js';
 import { TripPlace } from './entities/trip-place.entity.js';
@@ -18,7 +20,7 @@ import { AnthropicProvider } from './llm/anthropic.provider.js';
 import { OpenAiProvider } from './llm/openai.provider.js';
 import { MockLlmProvider } from './llm/mock-llm.provider.js';
 import { PLACES_PROVIDER } from './places/places-provider.js';
-import type { PlacesProvider } from './places/places-provider.js';
+import type { PlacesDirectory } from './places/places-provider.js';
 import { GooglePlacesProvider } from './places/google-places.provider.js';
 import { MockPlacesProvider } from './places/mock-places.provider.js';
 import { PlacesVerifier } from './places/places-verifier.js';
@@ -49,7 +51,7 @@ export function createLlmProvider(config: AiConfig): LlmProvider {
 }
 
 /** The places provider selected by `PLACES_PROVIDER`. */
-export function createPlacesProvider(config: AiConfig): PlacesProvider {
+export function createPlacesProvider(config: AiConfig): PlacesDirectory {
   return config.placesProvider === 'google' ? new GooglePlacesProvider(config.placesApiKey) : new MockPlacesProvider();
 }
 
@@ -59,12 +61,13 @@ export function createPlacesProvider(config: AiConfig): PlacesProvider {
  */
 @Module({
   imports: [TypeOrmModule.forFeature([AiConversation, AiMessage, TripPlace, Trip]), AuthModule, AppTripsModule],
-  controllers: [AiConversationsController, TripPlacesController],
+  controllers: [AiConversationsController, TripPlacesController, TripItineraryController],
   providers: [
     { provide: AI_CONFIG, inject: [ConfigService], useFactory: aiConfigFrom },
     { provide: LLM_PROVIDER, inject: [AI_CONFIG], useFactory: createLlmProvider },
     { provide: PLACES_PROVIDER, inject: [AI_CONFIG], useFactory: createPlacesProvider },
     PlacesVerifier,
+    ItineraryService,
     AiService,
   ],
   exports: [AiService],
@@ -76,6 +79,8 @@ export class AiModule implements OnModuleInit {
     private readonly deletionHooks: UserDeletionHooks,
     private readonly ai: AiService,
     @Inject(AI_CONFIG) private readonly config: AiConfig,
+    private readonly scheduleHooks: TripScheduleHooks,
+    private readonly itinerary: ItineraryService,
   ) {}
 
   onModuleInit() {
@@ -84,5 +89,7 @@ export class AiModule implements OnModuleInit {
     this.deletionHooks.register(async (userId) => {
       await this.ai.handleUserDeleted(userId);
     });
+    // A date change moves places off days the trip no longer has (docs/app-itinerary-spec.md).
+    this.scheduleHooks.register((manager, trip) => this.itinerary.onDatesChanged(manager, trip));
   }
 }

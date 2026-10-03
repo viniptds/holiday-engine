@@ -6,12 +6,13 @@ import { WizardModule } from '../wizard/wizard.module.js';
 import { TripMember } from './trip-member.entity.js';
 import { AppTripsController } from './app-trips.controller.js';
 import { AppTripsService } from './app-trips.service.js';
+import { TripScheduleHooks } from './trip-schedule-hooks.js';
 
 /** App trips. `AuthModule` provides `AuthGuard` and (through `UsersModule`) `USER_DIRECTORY`. */
 @Module({
   imports: [TypeOrmModule.forFeature([Trip, TripMember]), AuthModule, WizardModule],
   controllers: [AppTripsController],
-  providers: [AppTripsService],
-  exports: [AppTripsService],
+  providers: [AppTripsService, TripScheduleHooks],
+  exports: [AppTripsService, TripScheduleHooks],
 })
 export class AppTripsModule {}

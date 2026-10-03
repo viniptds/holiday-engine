@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { NoControlChars } from '../../trips/dto/no-control-chars.validator.js';
 import { Trim } from '../../trips/dto/trim.transform.js';
 import { MAX_MESSAGE_LENGTH } from '../ai.types.js';
@@ -20,5 +20,16 @@ export class StartAiConversationDto extends PostAiMessageDto {
   tripId?: string;
 }
 
-/** `POST /ai/conversations/:id/confirm` body: `{}`. */
-export class ConfirmAiConversationDto {}
+/**
+ * `POST /ai/conversations/:id/confirm` body: `{}`, or `{ placeIds }` to add only those of the
+ * draft's verified places (their `googlePlaceId`s). Without it, every verified place is added.
+ */
+export class ConfirmAiConversationDto {
+  @IsOptional()
+  @MaxLength(300, { each: true })
+  @IsNotEmpty({ each: true })
+  @IsString({ each: true })
+  @ArrayMaxSize(50)
+  @IsArray()
+  placeIds?: string[];
+}
