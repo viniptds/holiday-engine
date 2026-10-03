@@ -1,11 +1,12 @@
 import { Check, Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, Unique } from 'typeorm';
 import { Trip } from '../trips/trip.entity.js';
+import { User } from '../users/user.entity.js';
 import type { InviteRole } from './members.types.js';
 
 /**
  * An invitation to join a trip. Only the SHA-256 of the token is stored. Email invites are
  * single use (`acceptedBy`/`acceptedAt` set on accept); link invites stay usable until they
- * expire or are revoked. No FKs to users yet (that table arrives at G1).
+ * expire or are revoked.
  */
 @Entity('trip_invites')
 @Unique('UQ_trip_invites_tokenHash', ['tokenHash'])
@@ -36,11 +37,19 @@ export class TripInvite {
   @Column({ type: 'uuid' })
   createdBy: string;
 
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'createdBy', foreignKeyConstraintName: 'FK_trip_invites_createdBy' })
+  creator?: User;
+
   @Column({ type: 'timestamptz' })
   expiresAt: Date;
 
   @Column({ type: 'uuid', nullable: true })
   acceptedBy: string | null;
+
+  @ManyToOne(() => User, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'acceptedBy', foreignKeyConstraintName: 'FK_trip_invites_acceptedBy' })
+  acceptor?: User | null;
 
   @Column({ type: 'timestamptz', nullable: true })
   acceptedAt: Date | null;

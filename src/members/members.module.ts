@@ -1,8 +1,10 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Trip } from '../trips/trip.entity.js';
 import { TripMember } from '../app-trips/trip-member.entity.js';
 import { AppTripsModule } from '../app-trips/app-trips.module.js';
+import { AuthModule } from '../auth/auth.module.js';
+import { UserDeletionHooks } from '../users/user-deletion-hooks.js';
 import { TripInvite } from './trip-invite.entity.js';
 import { MembersController } from './members.controller.js';
 import { InvitesController } from './invites.controller.js';
@@ -11,10 +13,21 @@ import { InvitesService } from './invites.service.js';
 import { INVITE_MAILER, LoggingInviteMailer } from './invite-mailer.js';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Trip, TripMember, TripInvite]), AppTripsModule],
+  imports: [TypeOrmModule.forFeature([Trip, TripMember, TripInvite]), AuthModule, AppTripsModule],
   controllers: [MembersController, InvitesController],
   providers: [MembersService, InvitesService, { provide: INVITE_MAILER, useClass: LoggingInviteMailer }],
-  // MembersService.handleUserDeleted is wired to the users module's deletion hooks at G1.
   exports: [MembersService],
 })
-export class MembersModule {}
+export class MembersModule implements OnModuleInit {
+  constructor(
+    private readonly deletionHooks: UserDeletionHooks,
+    private readonly members: MembersService,
+  ) {}
+
+  /** `DELETE /me` deletes or hands over the user's trips and drops their memberships and invites. */
+  onModuleInit() {
+    this.deletionHooks.register(async (userId) => {
+      await this.members.handleUserDeleted(userId);
+    });
+  }
+}

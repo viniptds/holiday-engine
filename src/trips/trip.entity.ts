@@ -4,10 +4,13 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import type { PartyType, TravelerProfile } from '../app-trips/app-trips.types.js';
+import { User } from '../users/user.entity.js';
 
 /**
  * A trip. Bot trips belong to a chat (`provider` + `chatId`); app trips belong to users
@@ -32,9 +35,13 @@ export class Trip {
   @Column({ type: 'text', nullable: true })
   chatId: string | null;
 
-  // App trips: the owning user (no FK until the users table exists). Null for bot trips.
+  // App trips: the owning user. Null for bot trips. RESTRICT: see AddUserForeignKeys1760190000000.
   @Column({ type: 'uuid', nullable: true })
   ownerUserId: string | null;
+
+  @ManyToOne(() => User, { onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'ownerUserId', foreignKeyConstraintName: 'FK_trips_ownerUserId' })
+  owner?: User;
 
   @Column({ type: 'varchar', length: 100 })
   destination: string;

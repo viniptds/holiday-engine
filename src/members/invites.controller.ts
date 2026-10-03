@@ -3,8 +3,8 @@ import { APP_PREFIX } from '../app-common/auth-user.js';
 import type { AuthUser } from '../app-common/auth-user.js';
 import { AppExceptionFilter } from '../app-common/app-exception.filter.js';
 import { appValidationPipe } from '../app-common/app-validation.pipe.js';
-import { DevAuthGuard } from '../app-trips/dev-auth.guard.js';
-import { CurrentUser } from '../app-trips/current-user.decorator.js';
+import { AuthGuard } from '../auth/auth.guard.js';
+import { CurrentUser } from '../auth/current-user.decorator.js';
 import { AppTripDto } from '../app-trips/app-trips.types.js';
 import { InvitesService } from './invites.service.js';
 import { CreateInviteDto } from './dto/create-invite.dto.js';
@@ -12,7 +12,7 @@ import { InviteDto, InvitePreviewDto } from './members.types.js';
 
 @Controller(APP_PREFIX)
 @UseFilters(AppExceptionFilter)
-@UseGuards(DevAuthGuard)
+@UseGuards(AuthGuard)
 export class InvitesController {
   constructor(private readonly invites: InvitesService) {}
 

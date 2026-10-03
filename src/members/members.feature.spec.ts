@@ -1,14 +1,15 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { jest } from '@jest/globals';
 import { INestApplication, Logger } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { Trip } from '../trips/trip.entity.js';
 import { TripMember } from '../app-trips/trip-member.entity.js';
 import type { AppTripDto, TripRole } from '../app-trips/app-trips.types.js';
 import { appDb } from '../testing/app-db.js';
 import { barrier } from '../testing/in-memory-db.js';
+import { accessTokens, appTestingModule, seedUser } from '../testing/app-testing.js';
+import { User } from '../users/user.entity.js';
+import { RefreshToken } from '../auth/refresh-token.entity.js';
+import { RefreshTokenService } from '../auth/refresh-token.service.js';
 import { TripInvite } from './trip-invite.entity.js';
 import { MembersModule } from './members.module.js';
 import { MembersService } from './members.service.js';
@@ -22,6 +23,18 @@ const VIEWER = '33333333-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
 const OUTSIDER = '44444444-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
 const NEWCOMER = '55555555-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
 const OTHER = '66666666-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
+// Accounts for the email-invite rules (two accounts can share an email: Google ids are what's unique).
+const ANA = '77777777-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
+const ANA_TWIN = '88888888-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
+const ANA_CAPS = '99999999-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
+const SOMEONE = 'aaaaaaaa-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
+const EMAILS: Record<string, string> = {
+  [ANA]: 'ana@example.com',
+  [ANA_TWIN]: 'ana@example.com',
+  [ANA_CAPS]: 'Ana@EXAMPLE.com',
+  [SOMEONE]: 'someone@else.org',
+};
+const ALL_USERS = [OWNER, EDITOR, VIEWER, OUTSIDER, NEWCOMER, OTHER, ANA, ANA_TWIN, ANA_CAPS, SOMEONE];
 const USERS: Record<string, string> = { owner: OWNER, editor: EDITOR, viewer: VIEWER, outsider: OUTSIDER };
 const DAY = 86_400_000;
 
@@ -30,26 +43,14 @@ describe('Members and invites API (feature)', () => {
   let app: INestApplication;
   let baseUrl: string;
   let members: MembersService;
+  let refreshTokens: RefreshTokenService;
+  let tokens: Record<string, string>;
   const sendInvite = jest.spyOn(LoggingInviteMailer.prototype, 'sendInvite');
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [
-        ConfigModule.forRoot({
-          isGlobal: true,
-          ignoreEnvFile: true,
-          load: [() => ({ APP_INVITE_BASE_URL: 'https://holid.example/' })],
-        }),
-        MembersModule,
-      ],
-    })
-      .overrideProvider(getRepositoryToken(Trip))
-      .useValue(db.repository(Trip))
-      .overrideProvider(getRepositoryToken(TripMember))
-      .useValue(db.repository(TripMember))
-      .overrideProvider(getRepositoryToken(TripInvite))
-      .useValue(db.repository(TripInvite))
-      .compile();
+    const moduleRef = await appTestingModule(db, [MembersModule], { APP_INVITE_BASE_URL: 'https://holid.example/' }).compile();
+    tokens = await accessTokens(moduleRef, ALL_USERS);
+    refreshTokens = moduleRef.get(RefreshTokenService);
     app = moduleRef.createNestApplication({ logger: false });
     await app.listen(0, '127.0.0.1');
     baseUrl = `${await app.getUrl()}/app/v1`;
@@ -63,18 +64,18 @@ describe('Members and invites API (feature)', () => {
 
   beforeEach(() => {
     db.clear();
+    for (const id of ALL_USERS) seedUser(db, id, EMAILS[id] ? { email: EMAILS[id] } : {});
     db.afterRead = undefined;
     db.beforeWrite = undefined;
     sendInvite.mockClear();
   });
 
-  /** Each user's account email is `<first 4 chars of id>@example.com` unless `email` is given. */
-  const emailOf = (user: string) => `${user.slice(0, 4)}@example.com`;
-  const call = (method: string, path: string, user: string | null, body?: unknown, email?: string) =>
+  /** Calls the API signed in as `user` (a real access token), or anonymously with null. */
+  const call = (method: string, path: string, user: string | null, body?: unknown) =>
     fetch(`${baseUrl}${path}`, {
       method,
       headers: {
-        ...(user ? { 'x-dev-user-id': user, 'x-dev-user-email': email ?? emailOf(user) } : {}),
+        ...(user ? { authorization: `Bearer ${tokens[user]}` } : {}),
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -125,7 +126,7 @@ describe('Members and invites API (feature)', () => {
       const res = await call(method, path, null, method === 'PATCH' ? { role: 'viewer' } : undefined);
 
       expect(res.status).toBe(401);
-      expect(await res.json()).toEqual({ code: 'UNAUTHENTICATED', message: 'Authentication required' });
+      expect(await res.json()).toEqual({ code: 'UNAUTHENTICATED', message: 'Missing access token' });
     });
   });
 
@@ -540,16 +541,16 @@ describe('Members and invites API (feature)', () => {
 
     it('uses an email invite once', async () => {
       const id = seedTrip();
-      const token = seedInvite(id, { email: emailOf(NEWCOMER) });
+      const token = seedInvite(id, { email: 'ana@example.com' });
 
-      const first = await call('POST', `/invites/${token}/accept`, NEWCOMER);
-      // Even an account with the same email can't reuse it.
-      const second = await call('POST', `/invites/${token}/accept`, OUTSIDER, undefined, emailOf(NEWCOMER));
+      const first = await call('POST', `/invites/${token}/accept`, ANA);
+      // Even another account with the same email can't reuse it.
+      const second = await call('POST', `/invites/${token}/accept`, ANA_TWIN);
 
       expect(first.status).toBe(200);
       expect(second.status).toBe(404);
-      expect(roleOf(id, OUTSIDER)).toBeUndefined();
-      expect(db.all(TripInvite)[0]).toMatchObject({ acceptedBy: NEWCOMER, acceptedAt: expect.any(Date) });
+      expect(roleOf(id, ANA_TWIN)).toBeUndefined();
+      expect(db.all(TripInvite)[0]).toMatchObject({ acceptedBy: ANA, acceptedAt: expect.any(Date) });
     });
 
     it('refuses an email invite to another account without using it up', async () => {
@@ -564,45 +565,45 @@ describe('Members and invites API (feature)', () => {
       expect(db.all(TripInvite)[0]).toMatchObject({ acceptedBy: null, acceptedAt: null, revokedAt: null });
       // The preview stays open to anyone, and the right account can still use the invite.
       expect((await call('GET', `/invites/${token}`, OUTSIDER)).status).toBe(200);
-      const right = await call('POST', `/invites/${token}/accept`, NEWCOMER, undefined, 'ana@example.com');
+      const right = await call('POST', `/invites/${token}/accept`, ANA);
       expect(right.status).toBe(200);
-      expect(roleOf(id, NEWCOMER)).toBe('viewer');
+      expect(roleOf(id, ANA)).toBe('viewer');
     });
 
-    it('matches the email case-insensitively and ignoring surrounding spaces', async () => {
+    it('matches the email case-insensitively', async () => {
       const id = seedTrip();
       const token = seedInvite(id, { email: 'ana@example.com' });
 
-      const res = await call('POST', `/invites/${token}/accept`, NEWCOMER, undefined, '  Ana@EXAMPLE.com ');
+      const res = await call('POST', `/invites/${token}/accept`, ANA_CAPS);
 
       expect(res.status).toBe(200);
-      expect(db.all(TripInvite)[0].acceptedBy).toBe(NEWCOMER);
+      expect(db.all(TripInvite)[0].acceptedBy).toBe(ANA_CAPS);
     });
 
     it('lets anyone use a link invite, whatever their email', async () => {
       const id = seedTrip();
       const token = seedInvite(id);
 
-      expect((await call('POST', `/invites/${token}/accept`, NEWCOMER, undefined, 'someone@else.org')).status).toBe(200);
+      expect((await call('POST', `/invites/${token}/accept`, SOMEONE)).status).toBe(200);
     });
 
     it('lets only one of two concurrent accepts use an email invite', async () => {
       const id = seedTrip();
       const token = seedInvite(id, { email: 'ana@example.com' });
-      // Both requests read the invite as unused before either claims it. (Two accounts sharing an
-      // email can't happen with real auth; here it isolates the race from the email check.)
+      // Both requests read the invite as unused before either claims it. (Two accounts with the
+      // invited email, so both pass the email check and only the race decides.)
       const bothRead = barrier(2);
       db.afterRead = async (entity) => {
         if (entity === TripInvite) await bothRead();
       };
 
       const results = await Promise.all([
-        call('POST', `/invites/${token}/accept`, NEWCOMER, undefined, 'ana@example.com'),
-        call('POST', `/invites/${token}/accept`, OUTSIDER, undefined, 'ana@example.com'),
+        call('POST', `/invites/${token}/accept`, ANA),
+        call('POST', `/invites/${token}/accept`, ANA_TWIN),
       ]);
 
       expect(results.map((r) => r.status).sort()).toEqual([200, 404]);
-      const joined = [NEWCOMER, OUTSIDER].filter((u) => roleOf(id, u));
+      const joined = [ANA, ANA_TWIN].filter((u) => roleOf(id, u));
       expect(joined).toHaveLength(1);
       expect(db.all(TripInvite)[0].acceptedBy).toBe(joined[0]);
     });
@@ -724,6 +725,44 @@ describe('Members and invites API (feature)', () => {
       expect(db.all(Trip).map((t) => t.id).sort()).toEqual([solo, shared].sort());
       expect([roleOf(shared, OWNER), roleOf(shared, EDITOR), roleOf(solo, OWNER)]).toEqual(['owner', 'editor', 'owner']);
       expect(db.all(Trip, { id: shared })[0].ownerUserId).toBe(OWNER);
+    });
+
+    it('runs on DELETE /app/v1/me: sole trip deleted, shared trip handed over, tokens revoked', async () => {
+      const solo = seedTrip(OWNER, []);
+      const shared = seedTrip(OWNER, [[VIEWER, 'viewer'], [EDITOR, 'editor']]);
+      const theirs = seedTrip(OTHER, [[OWNER, 'editor']]);
+      const invite = seedInvite(shared, { createdBy: OWNER });
+      await refreshTokens.issue(OWNER);
+      await refreshTokens.issue(OWNER);
+
+      const res = await call('DELETE', '/me', OWNER);
+
+      expect(res.status).toBe(204);
+      expect(db.all(Trip, { id: solo })).toEqual([]);
+      expect(db.all(Trip, { id: shared })[0].ownerUserId).toBe(EDITOR);
+      expect([roleOf(shared, EDITOR), roleOf(shared, VIEWER), roleOf(shared, OWNER)]).toEqual(['owner', 'viewer', undefined]);
+      expect(roleOf(theirs, OWNER)).toBeUndefined();
+      expect(db.all(TripInvite, { tokenHash: hashToken(invite) })[0].revokedAt).toEqual(expect.any(Date));
+      expect(db.all(RefreshToken, { userId: OWNER }).map((t) => t.revokedAt)).toEqual([expect.any(Date), expect.any(Date)]);
+      expect(db.all(User, { id: OWNER })[0].deletedAt).toEqual(expect.any(Date));
+      // The access token stops working with the account.
+      expect((await call('GET', '/trips', OWNER)).status).toBe(401);
+      expect((await call('GET', `/trips/${shared}`, EDITOR)).status).toBe(200);
+    });
+
+    it('leaves the account and its trips intact when the trip cleanup fails', async () => {
+      const solo = seedTrip(OWNER, []);
+      db.beforeWrite = (operation, entity) => {
+        if (operation === 'update' && entity === TripInvite) throw new Error('db down');
+      };
+
+      const res = await call('DELETE', '/me', OWNER);
+
+      expect(res.status).toBe(500);
+      expect(db.all(Trip, { id: solo })).toHaveLength(1);
+      expect(db.all(User, { id: OWNER })[0].deletedAt).toBeNull();
+      db.beforeWrite = undefined;
+      expect((await call('GET', '/trips', OWNER)).status).toBe(200);
     });
 
     it('does nothing for a user with no trips', async () => {

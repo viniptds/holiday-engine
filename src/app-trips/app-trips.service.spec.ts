@@ -6,7 +6,13 @@ import { USER_DIRECTORY } from '../app-common/auth-user.js';
 import { Trip } from '../trips/trip.entity.js';
 import { TripMember } from './trip-member.entity.js';
 import { AppTripsService } from './app-trips.service.js';
-import { StubUserDirectory } from './stub-user-directory.js';
+import type { UserDirectory } from '../app-common/auth-user.js';
+
+// Every id resolves to "Traveler <first 4 chars>", like the users seeded in the feature specs.
+const directory: UserDirectory = {
+  getProfiles: async (ids) =>
+    new Map(ids.map((id) => [id, { id, displayName: `Traveler ${id.slice(0, 4)}`, avatarUrl: null }])),
+};
 import type { TripRole } from './app-trips.types.js';
 import { WizardService } from '../wizard/wizard.service.js';
 import { QUESTION_SET } from '../wizard/wizard.types.js';
@@ -106,7 +112,7 @@ describe('AppTripsService', () => {
         AppTripsService,
         { provide: getRepositoryToken(Trip), useValue: trips },
         { provide: getRepositoryToken(TripMember), useValue: members },
-        { provide: USER_DIRECTORY, useClass: StubUserDirectory },
+        { provide: USER_DIRECTORY, useValue: directory },
         WizardService,
         { provide: QUESTION_SET, useValue: QUESTIONS },
       ],

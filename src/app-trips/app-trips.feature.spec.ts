@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { INestApplication } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { FindOperator } from 'typeorm';
 import { Trip } from '../trips/trip.entity.js';
@@ -8,6 +7,8 @@ import { TripMember } from './trip-member.entity.js';
 import { AppTripsModule } from './app-trips.module.js';
 import type { AppTripDto, TripRole } from './app-trips.types.js';
 import { QUESTION_SET } from '../wizard/wizard.types.js';
+import { appDb } from '../testing/app-db.js';
+import { accessTokens, appTestingModule, seedUser } from '../testing/app-testing.js';
 import type { QuestionSet } from '../wizard/wizard.types.js';
 
 // A small question set, so these tests don't depend on the bundled questions.json.
@@ -154,10 +155,14 @@ describe('App trips API (feature)', () => {
   let app: INestApplication;
   let baseUrl: string;
   let db: FakeDb;
+  let tokens: Record<string, string>;
 
   beforeAll(async () => {
     db = new FakeDb();
-    const moduleRef = await Test.createTestingModule({ imports: [AppTripsModule] })
+    // Users and refresh tokens (for the real AuthGuard) live in the shared fake; trips and members in FakeDb.
+    const users = appDb();
+    for (const id of Object.values(USERS)) seedUser(users, id);
+    const moduleRef = await appTestingModule(users, [AppTripsModule])
       .overrideProvider(getRepositoryToken(Trip))
       .useValue(db.tripsRepo)
       .overrideProvider(getRepositoryToken(TripMember))
@@ -165,6 +170,7 @@ describe('App trips API (feature)', () => {
       .overrideProvider(QUESTION_SET)
       .useValue(QUESTIONS)
       .compile();
+    tokens = await accessTokens(moduleRef, Object.values(USERS));
     app = moduleRef.createNestApplication({ logger: false });
     await app.listen(0, '127.0.0.1');
     baseUrl = `${await app.getUrl()}/app/v1`;
@@ -183,7 +189,7 @@ describe('App trips API (feature)', () => {
     fetch(`${baseUrl}${path}`, {
       method,
       headers: {
-        ...(user ? { 'x-dev-user-id': user, 'x-dev-user-email': `${user.slice(0, 4)}@example.com` } : {}),
+        ...(user ? { authorization: `Bearer ${tokens[user]}` } : {}),
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -203,7 +209,14 @@ describe('App trips API (feature)', () => {
       const res = await call(method, path, null, method === 'POST' || method === 'PATCH' ? valid : undefined);
 
       expect(res.status).toBe(401);
-      expect(await res.json()).toEqual({ code: 'UNAUTHENTICATED', message: 'Authentication required' });
+      expect(await res.json()).toEqual({ code: 'UNAUTHENTICATED', message: 'Missing access token' });
+    });
+
+    it('rejects an invalid access token', async () => {
+      const res = await fetch(`${baseUrl}/trips`, { headers: { authorization: 'Bearer not-a-jwt' } });
+
+      expect(res.status).toBe(401);
+      expect((await res.json()).code).toBe('UNAUTHENTICATED');
     });
 
     it('authenticates before validating the body', async () => {

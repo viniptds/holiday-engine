@@ -3,15 +3,15 @@ import { APP_PREFIX } from '../app-common/auth-user.js';
 import type { AuthUser } from '../app-common/auth-user.js';
 import { AppExceptionFilter } from '../app-common/app-exception.filter.js';
 import { appValidationPipe } from '../app-common/app-validation.pipe.js';
-import { DevAuthGuard } from '../app-trips/dev-auth.guard.js';
-import { CurrentUser } from '../app-trips/current-user.decorator.js';
+import { AuthGuard } from '../auth/auth.guard.js';
+import { CurrentUser } from '../auth/current-user.decorator.js';
 import { MembersService } from './members.service.js';
 import { UpdateMemberDto } from './dto/update-member.dto.js';
 import { MemberDto } from './members.types.js';
 
 @Controller(`${APP_PREFIX}/trips/:id/members`)
 @UseFilters(AppExceptionFilter)
-@UseGuards(DevAuthGuard)
+@UseGuards(AuthGuard)
 export class MembersController {
   constructor(private readonly members: MembersService) {}
 

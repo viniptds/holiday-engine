@@ -6,14 +6,14 @@ import { appValidationPipe } from '../app-common/app-validation.pipe.js';
 import { AppTripsService } from './app-trips.service.js';
 import { CreateAppTripDto } from './dto/create-app-trip.dto.js';
 import { UpdateAppTripDto } from './dto/update-app-trip.dto.js';
-import { DevAuthGuard } from './dev-auth.guard.js';
-import { CurrentUser } from './current-user.decorator.js';
+import { AuthGuard } from '../auth/auth.guard.js';
+import { CurrentUser } from '../auth/current-user.decorator.js';
 import { AppTripDto } from './app-trips.types.js';
 
 /** App API trips (`docs/app-api-contract.md`). Access is by trip membership; see `AppTripsService`. */
 @Controller(`${APP_PREFIX}/trips`)
 @UseFilters(AppExceptionFilter)
-@UseGuards(DevAuthGuard)
+@UseGuards(AuthGuard)
 export class AppTripsController {
   constructor(private readonly trips: AppTripsService) {}
 

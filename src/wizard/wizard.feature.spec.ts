@@ -2,13 +2,14 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { INestApplication } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
 import { WizardModule } from './wizard.module.js';
 import { loadQuestionSet } from './question-set.loader.js';
 import type { QuestionSet } from './wizard.types.js';
+import { appDb } from '../testing/app-db.js';
+import { accessTokens, appTestingModule, seedUser } from '../testing/app-testing.js';
 
-const AUTH = { 'x-dev-user-id': '11111111-1f2b-4c3d-8e9f-0a1b2c3d4e5f', 'x-dev-user-email': 'a@example.com' };
+const USER_ID = '11111111-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
+let AUTH: Record<string, string> = {};
 
 const question = (n: number) => ({
   id: `q${n}`,
@@ -27,9 +28,10 @@ const setWith = (count: number): QuestionSet =>
 async function serve(path: string | undefined): Promise<{ app: INestApplication; url: string }> {
   if (path === undefined) delete process.env.WIZARD_QUESTIONS_PATH;
   else process.env.WIZARD_QUESTIONS_PATH = path;
-  const moduleRef = await Test.createTestingModule({
-    imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), WizardModule],
-  }).compile();
+  const db = appDb();
+  seedUser(db, USER_ID);
+  const moduleRef = await appTestingModule(db, [WizardModule]).compile();
+  AUTH = { authorization: `Bearer ${(await accessTokens(moduleRef, [USER_ID]))[USER_ID]}` };
   const app = moduleRef.createNestApplication({ logger: false });
   await app.listen(0, '127.0.0.1');
   return { app, url: `${await app.getUrl()}/app/v1/wizard/questions` };
@@ -72,7 +74,7 @@ describe('GET /app/v1/wizard/questions (feature)', () => {
     const res = await fetch(served.url);
 
     expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ code: 'UNAUTHENTICATED', message: 'Authentication required' });
+    expect(await res.json()).toEqual({ code: 'UNAUTHENTICATED', message: 'Missing access token' });
   });
 
   it.each([1, 5])('serves a %i-question file from WIZARD_QUESTIONS_PATH with no code change', async (count) => {

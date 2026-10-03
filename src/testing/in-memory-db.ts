@@ -20,6 +20,8 @@ export type TableSpec = {
   generate?: () => Row;
   /** Column refreshed on every save/update, like `@UpdateDateColumn`. */
   updateDate?: string;
+  /** Soft-delete column, like `@DeleteDateColumn`: rows with it set are hidden from reads. */
+  deleteDate?: string;
   /** Many-to-one relations: property -> (target entity, local column holding the target's `id`). */
   relations?: Record<string, { entity: EntityClass; column: string }>;
 };
@@ -116,6 +118,7 @@ export class InMemoryDb {
       insert: (values: Partial<T>) => manager.insert(entity, values),
       update: (where: Where, values: Partial<T>) => manager.update(entity, where, values),
       delete: (where: Where) => manager.delete(entity, where),
+      softDelete: (where: Where) => manager.softDelete(entity, where),
     };
   }
 
@@ -174,6 +177,14 @@ export class InMemoryDb {
         for (const row of rows) db.deleteRow(table, row, undo);
         return { affected: rows.length };
       },
+      async softDelete<T extends object>(entity: EntityClass<T>, where: Where) {
+        const table = db.table(entity);
+        const column = table.spec.deleteDate;
+        if (!column) throw new Error(`InMemoryDb: ${entity.name} has no deleteDate`);
+        const rows = table.rows.filter((r) => r[column] == null && matches(r, where));
+        db.updateRows(table, rows, { [column]: new Date() }, undo);
+        return { affected: rows.length };
+      },
       getRepository<T extends object>(entity: EntityClass<T>) {
         const m = this;
         return {
@@ -215,7 +226,8 @@ export class InMemoryDb {
       }
       return out;
     };
-    const rows = table.rows.filter((r) => matches(r, where)).map(withRelations);
+    const live = (r: Row) => !table.spec.deleteDate || r[table.spec.deleteDate] == null;
+    const rows = table.rows.filter((r) => live(r) && matches(r, where)).map(withRelations);
     if (order) rows.sort((a, b) => compareBy(a, b, order));
     const picked = take === undefined ? rows : rows.slice(0, take);
     return picked.map((r) => {
