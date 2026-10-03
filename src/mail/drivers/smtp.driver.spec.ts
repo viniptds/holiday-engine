@@ -64,6 +64,27 @@ describe('SmtpMailTransport', () => {
     expect(transporter.verify).toHaveBeenCalledTimes(2);
   });
 
+  it('stops waiting when the signal aborts (nodemailer cannot cancel), and ignores the late result', async () => {
+    const { transporter, create } = fakeTransporter();
+    let finish!: () => void;
+    transporter.sendMail.mockImplementationOnce(() => new Promise((resolve) => (finish = () => resolve({ messageId: '<late>' }))));
+    const controller = new AbortController();
+
+    const pending = new SmtpMailTransport(options, sender, create).send(message, controller.signal);
+    await new Promise((resolve) => setImmediate(resolve));
+    controller.abort(new Error('timed out after 15000 ms'));
+
+    await expect(pending).rejects.toThrow('timed out after 15000 ms');
+    finish();
+  });
+
+  it('does not start a send for an already aborted signal', async () => {
+    const { transporter, create } = fakeTransporter();
+
+    await expect(new SmtpMailTransport(options, sender, create).send(message, AbortSignal.abort(new Error('gone')))).rejects.toThrow('gone');
+    expect(transporter.sendMail).not.toHaveBeenCalled();
+  });
+
   it('passes on a rejected message', async () => {
     const { transporter, create } = fakeTransporter();
     transporter.sendMail.mockRejectedValueOnce(new Error('550 Sender not authorized'));

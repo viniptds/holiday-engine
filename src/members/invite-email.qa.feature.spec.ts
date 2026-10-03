@@ -138,7 +138,7 @@ describe('Invite emails (QA feature)', () => {
 
   describe('rate limits under concurrency (M-73)', () => {
     // BUG-019: the limits read rows, then insert, without a lock or a constraint.
-    it.failing('lets only one of two concurrent invites to the same recipient through (1 per 10 min)', async () => {
+    it('lets only one of two concurrent invites to the same recipient through (1 per 10 min)', async () => {
       const id = seedTrip();
       pairInviteReads();
 
@@ -152,7 +152,7 @@ describe('Invite emails (QA feature)', () => {
     });
 
     // BUG-019
-    it.failing('keeps the inviter at 20 email invites per 24 h when the last two arrive together', async () => {
+    it('keeps the inviter at 20 email invites per 24 h when the last two arrive together', async () => {
       const id = seedTrip();
       for (let i = 0; i < 19; i += 1) pastEmailInvite(id, HOUR);
       pairInviteReads();
@@ -176,7 +176,7 @@ describe('Invite emails (QA feature)', () => {
   describe('background send timeout (M-54a)', () => {
     // BUG-020: a send that times out keeps running; if it finishes later, the email goes out and the
     // mailer logs "emailed" after the service already logged the invite as failed.
-    it.failing('logs no success for an invite after its send timed out', async () => {
+    it('logs no success for an invite after its send timed out', async () => {
       const id = seedTrip();
       let release!: () => void;
       const delivered = jest.fn();
@@ -249,7 +249,7 @@ describe('Invite emails (QA feature)', () => {
     });
 
     // BUG-021: redaction matches the exact address only, so an echo in another case reaches the warn log.
-    it.failing('when the provider echoes the address in a different case', async () => {
+    it('when the provider echoes the address in a different case', async () => {
       const id = seedTrip();
       jest.spyOn(transport, 'send').mockImplementationOnce(async (message: MailMessage) => {
         throw new Error(`550 5.1.1 <${message.to.toUpperCase()}>: Recipient address rejected`);

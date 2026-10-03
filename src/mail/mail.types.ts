@@ -14,8 +14,12 @@ export type MailMessage = {
 export interface MailTransport {
   /** The MAIL_PROVIDER value, for logs. */
   readonly provider: string;
-  /** Resolves with the provider's message id when it gives one; rejects if the provider refuses the message. */
-  send(message: MailMessage): Promise<{ id?: string }>;
+  /**
+   * Resolves with the provider's message id when it gives one; rejects if the provider refuses the
+   * message. When `signal` aborts, rejects with its reason and cancels the request where the
+   * provider allows it (fetch-based drivers); otherwise the late result is ignored.
+   */
+  send(message: MailMessage, signal?: AbortSignal): Promise<{ id?: string }>;
   /** Checks the provider can be reached (used by MAIL_VERIFY_ON_BOOT). Drivers without a connection omit it. */
   verify?(): Promise<void>;
 }

@@ -35,7 +35,7 @@ export class MailjetMailTransport implements MailTransport {
     this.authorization = `Basic ${Buffer.from(`${credentials.apiKey}:${credentials.apiSecret}`).toString('base64')}`;
   }
 
-  async send(message: MailMessage): Promise<{ id?: string }> {
+  async send(message: MailMessage, signal?: AbortSignal): Promise<{ id?: string }> {
     const replyTo = message.replyTo ?? this.sender.replyTo;
     const payload = {
       Messages: [
@@ -54,7 +54,8 @@ export class MailjetMailTransport implements MailTransport {
       method: 'POST',
       headers: { authorization: this.authorization, 'content-type': 'application/json' },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      // The caller's signal cancels the HTTP request itself.
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS),
     });
     const body = (await response.json().catch(() => null)) as MailjetResponse | null;
     if (!response.ok) {

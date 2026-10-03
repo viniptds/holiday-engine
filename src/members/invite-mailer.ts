@@ -3,6 +3,7 @@ import type { Locale } from '../app-common/locale.js';
 import { MAIL_TRANSPORT } from '../mail/mail.types.js';
 import type { MailTransport } from '../mail/mail.types.js';
 import { renderInviteEmail } from '../mail/templates/invite.js';
+import { abortable } from '../mail/abort.js';
 import type { InviteRole } from './members.types.js';
 
 /**
@@ -28,7 +29,8 @@ export type InviteEmail = {
 
 /** Sends email invites. Injected with `INVITE_MAILER`. */
 export interface InviteMailer {
-  sendInvite(invite: InviteEmail): Promise<void>;
+  /** Rejects with `signal`'s reason as soon as it aborts; a late delivery is then never reported as a success. */
+  sendInvite(invite: InviteEmail, signal?: AbortSignal): Promise<void>;
 }
 
 export const INVITE_MAILER = Symbol('INVITE_MAILER');
@@ -40,7 +42,7 @@ export class MailInviteMailer implements InviteMailer {
 
   constructor(@Inject(MAIL_TRANSPORT) private readonly transport: MailTransport) {}
 
-  async sendInvite(invite: InviteEmail): Promise<void> {
+  async sendInvite(invite: InviteEmail, signal?: AbortSignal): Promise<void> {
     const email = renderInviteEmail(invite.locale, {
       inviter: invite.invitedBy,
       destination: invite.destination,
@@ -51,7 +53,16 @@ export class MailInviteMailer implements InviteMailer {
       deepLink: invite.deepLink,
       expiresAt: invite.expiresAt,
     });
-    const { id } = await this.transport.send({ to: invite.email, ...email, tags: ['trip-invite'] });
+    const sending = this.transport.send({ to: invite.email, ...email, tags: ['trip-invite'] }, signal);
+    // If the provider still answers after the abort (a driver that can't cancel), say so: the
+    // caller has already logged this invite as failed.
+    sending.then(
+      ({ id }) => {
+        if (signal?.aborted) this.logger.log(`Invite ${invite.inviteId} delivered after timeout${id ? ` (message ${id})` : ''}`);
+      },
+      () => undefined,
+    );
+    const { id } = await abortable(sending, signal);
     this.logger.log(
       `Invite ${invite.inviteId} for trip ${invite.tripId} emailed (${invite.locale}, ${this.transport.provider}` +
         `${id ? `, message ${id}` : ''})`,

@@ -3,7 +3,7 @@ import { Inject, Injectable, Logger, OnApplicationShutdown } from '@nestjs/commo
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, MoreThan, Not, Repository } from 'typeorm';
-import type { FindOptionsWhere } from 'typeorm';
+import type { EntityManager, FindOptionsWhere } from 'typeorm';
 import { AppError } from '../app-common/app-error.js';
 import { USER_DIRECTORY } from '../app-common/auth-user.js';
 import type { AuthUser, UserDirectory } from '../app-common/auth-user.js';
@@ -13,7 +13,8 @@ import type { AppTripDto } from '../app-trips/app-trips.types.js';
 import { TripInvite } from './trip-invite.entity.js';
 import { INVITE_MAILER } from './invite-mailer.js';
 import type { InviteMailer } from './invite-mailer.js';
-import { redactLinks, redactValues } from '../mail/redact.js';
+import { redactProviderError } from '../mail/redact.js';
+import { abortable } from '../mail/abort.js';
 import { DEFAULT_LOCALE } from '../app-common/locale.js';
 import type { Locale } from '../app-common/locale.js';
 import { CreateInviteDto } from './dto/create-invite.dto.js';
@@ -50,13 +51,16 @@ export const EMAIL_INVITE_LIMITS = {
   perRecipient: { max: 1, windowMs: 10 * 60 * 1000 },
 };
 
-function withTimeout(promise: Promise<void>, ms: number): Promise<void> {
-  let timer: NodeJS.Timeout | undefined;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`timed out after ${ms} ms`)), ms);
-    timer.unref();
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+/** Advisory lock statement (transaction-scoped): Postgres hashes the text key to a lock id. */
+const ADVISORY_XACT_LOCK = 'SELECT pg_advisory_xact_lock(hashtext($1))';
+
+/**
+ * Serializes email-invite creation for the rate limits. Always in this order (inviter, then trip +
+ * recipient), so two transactions can't wait on each other: no deadlocks.
+ */
+async function lockEmailInviteKeys(manager: EntityManager, inviterId: string, tripId: string, email: string): Promise<void> {
+  await manager.query(ADVISORY_XACT_LOCK, [`trip-invite:inviter:${inviterId}`]);
+  await manager.query(ADVISORY_XACT_LOCK, [`trip-invite:recipient:${tripId}:${email}`]);
 }
 
 const isUniqueViolation = (error: unknown) => (error as { code?: unknown })?.code === '23505';
@@ -71,6 +75,7 @@ export class InvitesService implements OnApplicationShutdown {
   private readonly logger = new Logger(InvitesService.name);
   private readonly baseUrl: string;
   private readonly pendingEmails = new Set<Promise<void>>();
+  private readonly pendingAborts = new Set<AbortController>();
   /** Overall limit for sending one invite email in the background. */
   sendTimeoutMs = INVITE_SEND_TIMEOUT_MS;
 
@@ -93,22 +98,27 @@ export class InvitesService implements OnApplicationShutdown {
   async create(user: AuthUser, tripId: string, data: CreateInviteDto, locale: Locale = DEFAULT_LOCALE): Promise<InviteDto> {
     const { trip } = await this.appTrips.requireMembership(user, tripId, ['owner', 'editor']);
     const email = data.email ? normalizeEmail(data.email) : null;
-    if (email !== null) await this.enforceEmailInviteLimits(user.id, tripId, email);
-
     const token = newToken();
-    const invite = await this.invites.save(
-      this.invites.create({
-        tripId,
-        email,
-        tokenHash: hashToken(token),
-        role: data.role ?? DEFAULT_INVITE_ROLE,
-        createdBy: user.id,
-        expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * DAY_MS),
-        acceptedBy: null,
-        acceptedAt: null,
-        revokedAt: null,
-      }),
-    );
+    // Check the limits and insert in one transaction, serialized per inviter and per (trip, recipient).
+    const invite = await this.invites.manager.transaction(async (manager) => {
+      if (email !== null) {
+        await lockEmailInviteKeys(manager, user.id, tripId, email);
+        await this.enforceEmailInviteLimits(manager.getRepository(TripInvite), user.id, tripId, email);
+      }
+      return manager.save(
+        manager.create(TripInvite, {
+          tripId,
+          email,
+          tokenHash: hashToken(token),
+          role: data.role ?? DEFAULT_INVITE_ROLE,
+          createdBy: user.id,
+          expiresAt: new Date(Date.now() + INVITE_TTL_DAYS * DAY_MS),
+          acceptedBy: null,
+          acceptedAt: null,
+          revokedAt: null,
+        }),
+      );
+    });
     const dto: InviteDto = {
       id: invite.id,
       url: `${this.baseUrl}/invite/${token}`,
@@ -120,9 +130,10 @@ export class InvitesService implements OnApplicationShutdown {
 
     if (invite.email !== null) {
       const recipient = invite.email;
-      this.inBackground(invite.id, [token, recipient], async () => {
+      this.inBackground(invite.id, [token, recipient], async (signal) => {
         const name = (await this.users.getProfiles([user.id])).get(user.id)?.displayName?.trim();
-        await this.mailer.sendInvite({
+        await this.mailer.sendInvite(
+          {
           inviteId: invite.id,
           tripId,
           email: recipient,
@@ -136,7 +147,9 @@ export class InvitesService implements OnApplicationShutdown {
           deepLink: dto.deepLink,
           expiresAt: new Date(invite.expiresAt),
           locale,
-        });
+          },
+          signal,
+        );
       });
     }
     return dto;
@@ -147,24 +160,33 @@ export class InvitesService implements OnApplicationShutdown {
     await Promise.allSettled([...this.pendingEmails]);
   }
 
+  /** On shutdown, aborts the sends still running (each is logged as failed) and waits for them to settle. */
   async onApplicationShutdown(): Promise<void> {
+    for (const controller of this.pendingAborts) controller.abort(new Error('the engine is shutting down'));
     await this.whenEmailsSettled();
   }
 
   /**
    * Sliding windows over trip_invites.createdAt. Every email invite row counts (revoked or not
    * delivered too); a refused attempt creates none. Emails are stored lowercased, so recipients
-   * match case-insensitively. Under heavy concurrency a burst can briefly exceed a limit.
+   * match case-insensitively. Runs inside the create transaction, after `lockEmailInviteKeys`.
    */
-  private async enforceEmailInviteLimits(inviterId: string, tripId: string, email: string): Promise<void> {
+  private async enforceEmailInviteLimits(
+    invites: Pick<Repository<TripInvite>, 'find'>,
+    inviterId: string,
+    tripId: string,
+    email: string,
+  ): Promise<void> {
     const now = Date.now();
     await this.enforceLimit(
+      invites,
       { tripId, email },
       EMAIL_INVITE_LIMITS.perRecipient,
       now,
       'This address was invited to this trip a few minutes ago; try again later',
     );
     await this.enforceLimit(
+      invites,
       { createdBy: inviterId, email: Not(IsNull()) },
       EMAIL_INVITE_LIMITS.perInviter,
       now,
@@ -173,12 +195,13 @@ export class InvitesService implements OnApplicationShutdown {
   }
 
   private async enforceLimit(
+    invites: Pick<Repository<TripInvite>, 'find'>,
     where: FindOptionsWhere<TripInvite>,
     { max, windowMs }: { max: number; windowMs: number },
     now: number,
     message: string,
   ): Promise<void> {
-    const rows = await this.invites.find({
+    const rows = await invites.find({
       where: { ...where, createdAt: MoreThan(new Date(now - windowMs)) },
       order: { createdAt: 'ASC' },
       select: { id: true, createdAt: true },
@@ -189,16 +212,27 @@ export class InvitesService implements OnApplicationShutdown {
     throw new AppError('RATE_LIMITED', message, undefined, { retryAfterSeconds: (freedAt - now) / 1000 });
   }
 
-  /** Runs `work` without blocking the request, within `sendTimeoutMs`; failures are logged at warn, redacted. */
-  private inBackground(inviteId: string, secrets: string[], work: () => Promise<void>): void {
-    const job = withTimeout(work(), this.sendTimeoutMs)
+  /**
+   * Runs `work` without blocking the request. After `sendTimeoutMs` its signal aborts: the send is
+   * cancelled where the provider allows it, and `work` rejects at once. Failures (timeouts too) are
+   * logged at warn, with the token, the recipient, any email address and any link redacted.
+   */
+  private inBackground(inviteId: string, secrets: string[], work: (signal: AbortSignal) => Promise<void>): void {
+    const controller = new AbortController();
+    const ms = this.sendTimeoutMs;
+    const timer = setTimeout(() => controller.abort(new Error(`timed out after ${ms} ms`)), ms);
+    timer.unref();
+    this.pendingAborts.add(controller);
+    const job = abortable(work(controller.signal), controller.signal)
       .catch((error: unknown) => {
-        // Provider errors can echo the address or the link: keep both (and any link) out of the logs.
         const raw = error instanceof Error ? error.message : String(error);
-        const detail = redactLinks(redactValues(raw, secrets.map((secret) => [secret, '[redacted]'] as [string, string])));
-        this.logger.warn(`Sending invite ${inviteId} failed: ${detail}`);
+        this.logger.warn(`Sending invite ${inviteId} failed: ${redactProviderError(raw, secrets)}`);
       })
-      .finally(() => this.pendingEmails.delete(job));
+      .finally(() => {
+        clearTimeout(timer);
+        this.pendingAborts.delete(controller);
+        this.pendingEmails.delete(job);
+      });
     this.pendingEmails.add(job);
   }
 

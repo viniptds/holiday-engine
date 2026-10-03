@@ -81,6 +81,23 @@ describe('MailjetMailTransport', () => {
     await expect(transport.send(message)).rejects.toThrow('Mailjet did not accept the message (status error): Blocked');
   });
 
+  it("cancels the HTTP request when the caller's signal aborts", async () => {
+    const fetchFn = jest.fn(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        }),
+    );
+    const transport = new MailjetMailTransport(credentials, sender, fetchFn as typeof fetch);
+    const controller = new AbortController();
+
+    const pending = transport.send(message, controller.signal);
+    controller.abort(new Error('timed out after 15000 ms'));
+
+    await expect(pending).rejects.toThrow('timed out after 15000 ms');
+    expect(fetchFn.mock.calls[0][1]?.signal?.aborted).toBe(true);
+  });
+
   it('passes on network errors', async () => {
     const { transport } = mailjet(new Error('fetch failed'));
 

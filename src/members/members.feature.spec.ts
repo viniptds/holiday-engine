@@ -438,6 +438,7 @@ describe('Members and invites API (feature)', () => {
           deepLink: invite.deepLink,
           locale: 'en',
         }),
+        expect.any(AbortSignal),
       );
     });
 
@@ -449,7 +450,7 @@ describe('Members and invites API (feature)', () => {
 
       expect(res.status).toBe(201);
       const invite = (await res.json()) as InviteDto;
-      expect(sendInvite).toHaveBeenCalledWith(expect.objectContaining({ locale: 'es' }));
+      expect(sendInvite).toHaveBeenCalledWith(expect.objectContaining({ locale: 'es' }), expect.any(AbortSignal));
       const [message] = providerSend.mock.calls[0] as [MailMessage];
       expect(message).toMatchObject({
         to: 'ana@example.com',
@@ -468,7 +469,7 @@ describe('Members and invites API (feature)', () => {
 
       await call('POST', `/trips/${id}/invites`, OWNER, { email: 'ana@example.com' }, { 'accept-language': 'fr-FR' });
 
-      expect(sendInvite).toHaveBeenCalledWith(expect.objectContaining({ locale: 'en' }));
+      expect(sendInvite).toHaveBeenCalledWith(expect.objectContaining({ locale: 'en' }), expect.any(AbortSignal));
     });
 
     describe("keeps the token and the invitee's email out of the logs, at every level", () => {
@@ -545,10 +546,13 @@ describe('Members and invites API (feature)', () => {
     it('responds without waiting for the email, which then times out after the overall limit', async () => {
       const id = seedTrip();
       let release!: () => void;
-      const providerSend = jest
-        .spyOn(transport, 'send')
-        .mockImplementationOnce(() => new Promise((resolve) => (release = () => resolve({}))));
+      let providerSignal: AbortSignal | undefined;
+      const providerSend = jest.spyOn(transport, 'send').mockImplementationOnce((_message, signal) => {
+        providerSignal = signal;
+        return new Promise((resolve) => (release = () => resolve({ id: 'late-9' })));
+      });
       const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
       invitesService.sendTimeoutMs = 100;
 
       const started = Date.now();
@@ -560,8 +564,34 @@ describe('Members and invites API (feature)', () => {
       await invitesService.whenEmailsSettled();
       expect(Date.now() - started).toBeGreaterThanOrEqual(90);
       expect(warn).toHaveBeenCalledWith(`Sending invite ${invite.id} failed: timed out after 100 ms`);
+      // The provider was told to stop.
+      expect(providerSignal?.aborted).toBe(true);
+      // A provider that answers anyway is reported as a late delivery, never as a success.
       release();
+      await new Promise((resolve) => setImmediate(resolve));
+      const lines = log.mock.calls.map(([message]) => String(message)).filter((m) => m.includes(invite.id));
+      expect(lines).toEqual([`Invite ${invite.id} delivered after timeout (message late-9)`]);
       invitesService.sendTimeoutMs = 15_000;
+      warn.mockRestore();
+      log.mockRestore();
+      providerSend.mockRestore();
+    });
+
+    it('aborts the sends still running on shutdown, and logs them as failed', async () => {
+      const id = seedTrip();
+      let providerSignal: AbortSignal | undefined;
+      const providerSend = jest.spyOn(transport, 'send').mockImplementationOnce((_message, signal) => {
+        providerSignal = signal;
+        return new Promise(() => undefined);
+      });
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+      const invite = (await (await send('POST', `/trips/${id}/invites`, OWNER, { email: 'ana@example.com' })).json()) as InviteDto;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await invitesService.onApplicationShutdown();
+
+      expect(providerSignal?.aborted).toBe(true);
+      expect(warn).toHaveBeenCalledWith(`Sending invite ${invite.id} failed: the engine is shutting down`);
       warn.mockRestore();
       providerSend.mockRestore();
     });
@@ -577,7 +607,7 @@ describe('Members and invites API (feature)', () => {
 
       await call('POST', `/trips/${id}/invites`, OWNER, { email: 'ana@example.com' }, { 'accept-language': 'pt-BR' });
 
-      expect(sendInvite).toHaveBeenCalledWith(expect.objectContaining({ invitedBy: null }));
+      expect(sendInvite).toHaveBeenCalledWith(expect.objectContaining({ invitedBy: null }), expect.any(AbortSignal));
       const [message] = providerSend.mock.calls[0] as [MailMessage];
       expect(message.text).toContain('Alguém do Holid.ai está planejando');
       expect(message.text + message.html).not.toContain('1111@example.com');
@@ -694,6 +724,20 @@ describe('Members and invites API (feature)', () => {
 
       db.manager(null).update(TripInvite, { email: 'bia@example.com' }, { createdAt: new Date(Date.now() - 11 * MIN) });
       expect((await call('POST', `/trips/${id}/invites`, OWNER, { email: 'bia@example.com' })).status).toBe(201);
+    });
+
+    it('takes the advisory locks inside the create transaction, inviter first, for email invites only', async () => {
+      const id = seedTrip();
+      const query = jest.spyOn(db as unknown as { query: (...args: unknown[]) => Promise<unknown[]> }, 'query');
+
+      await call('POST', `/trips/${id}/invites`, OWNER, { email: ' Bia@Example.com ' });
+      await call('POST', `/trips/${id}/invites`, OWNER, {});
+
+      expect(query.mock.calls.map(([sql, params, undo]) => [sql, params, Array.isArray(undo)])).toEqual([
+        ['SELECT pg_advisory_xact_lock(hashtext($1))', [`trip-invite:inviter:${OWNER}`], true],
+        ['SELECT pg_advisory_xact_lock(hashtext($1))', [`trip-invite:recipient:${id}:bia@example.com`], true],
+      ]);
+      query.mockRestore();
     });
 
     it('counts invites whose email failed to send', async () => {

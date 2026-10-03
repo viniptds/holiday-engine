@@ -129,7 +129,53 @@ export class InMemoryDb {
     } catch (error) {
       for (const step of undo.reverse()) step();
       throw error;
+    } finally {
+      // Like Postgres, transaction-level advisory locks are released at commit or rollback.
+      this.releaseAdvisoryLocks(undo);
     }
+  }
+
+  // Transaction-level advisory locks (`pg_advisory_xact_lock`), keyed by the text the SQL hashes.
+  // Postgres keys them by hashtext(), so distinct texts can collide there; that only adds waiting.
+  private readonly advisoryLocks = new Map<string, { owner: object; waiters: (() => void)[] }>();
+
+  /** Waits until `owner` (a transaction) holds the lock on `key`. Re-entrant, like Postgres. */
+  private async acquireAdvisoryLock(key: string, owner: object): Promise<void> {
+    for (;;) {
+      const lock = this.advisoryLocks.get(key);
+      if (!lock) {
+        this.advisoryLocks.set(key, { owner, waiters: [] });
+        return;
+      }
+      if (lock.owner === owner) return;
+      await new Promise<void>((resolve) => lock.waiters.push(resolve));
+    }
+  }
+
+  private releaseAdvisoryLocks(owner: object): void {
+    for (const [key, lock] of [...this.advisoryLocks]) {
+      if (lock.owner !== owner) continue;
+      this.advisoryLocks.delete(key);
+      // Wake every waiter; each one re-checks and only one gets the lock.
+      for (const wake of lock.waiters) wake();
+    }
+  }
+
+  /** The raw SQL the fake understands: only `SELECT pg_advisory_xact_lock(hashtext($1))`. */
+  private async query(sql: string, params: unknown[], undo: Undo[] | null): Promise<unknown[]> {
+    if (!/^\s*SELECT pg_advisory_xact_lock\(hashtext\(\$1\)\)\s*;?\s*$/i.test(sql)) {
+      throw new Error(`InMemoryDb: unsupported query: ${sql}`);
+    }
+    const key = String(params[0]);
+    if (undo) {
+      await this.acquireAdvisoryLock(key, undo);
+    } else {
+      // Outside a transaction Postgres takes the lock and releases it when the statement ends.
+      const owner = {};
+      await this.acquireAdvisoryLock(key, owner);
+      this.releaseAdvisoryLocks(owner);
+    }
+    return [{ pg_advisory_xact_lock: '' }];
   }
 
   /** EntityManager-like API. With `undo`, changes are recorded so the transaction can roll back. */
@@ -184,6 +230,9 @@ export class InMemoryDb {
         const rows = table.rows.filter((r) => r[column] == null && matches(r, where));
         db.updateRows(table, rows, { [column]: new Date() }, undo);
         return { affected: rows.length };
+      },
+      query(sql: string, params: unknown[] = []): Promise<unknown[]> {
+        return db.query(sql, params, undo);
       },
       getRepository<T extends object>(entity: EntityClass<T>) {
         const m = this;

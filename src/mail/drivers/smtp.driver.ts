@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import type { MailDriver, MailMessage, MailSender, MailTransport, SettingReader } from '../mail.types.js';
+import { abortable } from '../abort.js';
 
 /** What we use of a nodemailer transporter (the tests pass a fake). */
 export type SmtpTransporter = {
@@ -41,16 +42,20 @@ export class SmtpMailTransport implements MailTransport {
     await this.verified;
   }
 
-  async send(message: MailMessage): Promise<{ id?: string }> {
-    await this.verify();
-    const info = await this.transporter.sendMail({
+  /**
+   * nodemailer can't cancel an SMTP transaction once it has started, so an abort makes this reject
+   * at once and the late result is ignored (the connection ends by its own timeouts).
+   */
+  async send(message: MailMessage, signal?: AbortSignal): Promise<{ id?: string }> {
+    await abortable(this.verify(), signal);
+    const info = await abortable(this.transporter.sendMail({
       from: { name: this.sender.fromName, address: this.sender.from },
       to: message.to,
       subject: message.subject,
       text: message.text,
       html: message.html,
       ...((message.replyTo ?? this.sender.replyTo) ? { replyTo: message.replyTo ?? this.sender.replyTo } : {}),
-    });
+    }), signal);
     return { id: info.messageId };
   }
 }

@@ -13,7 +13,8 @@ export class LogMailTransport implements MailTransport {
 
   constructor(private readonly sender: MailSender) {}
 
-  async send(message: MailMessage): Promise<{ id?: string }> {
+  async send(message: MailMessage, signal?: AbortSignal): Promise<{ id?: string }> {
+    signal?.throwIfAborted();
     const tags = message.tags?.length ? ` [${message.tags.join(', ')}]` : '';
     this.logger.log(`Not sent (MAIL_PROVIDER=log): subject "${message.subject}"${tags}`);
     this.logger.debug(`From ${this.sender.fromName}${this.sender.from ? ` <${this.sender.from}>` : ''}\n${redactLinks(message.text)}`);
