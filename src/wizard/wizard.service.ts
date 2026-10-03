@@ -1,9 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AppError } from '../app-common/app-error.js';
 import type { TravelerProfile } from '../app-trips/app-trips.types.js';
+import type { Locale } from '../app-common/locale.js';
+import { SUPPORTED_LOCALES } from '../app-common/locale.js';
 import { QUESTION_SET } from './wizard.types.js';
-import type { QuestionSet } from './wizard.types.js';
-import { computePersona } from './persona.js';
+import type { LocalizedQuestionSet, QuestionSet } from './wizard.types.js';
+import { computePersona, personaKey, personaLabel } from './persona.js';
+import { resolveQuestionSet } from './localize.js';
 
 /** `travelerProfile` as clients send it: the persona is always computed here. */
 export type TravelerProfileInput = { questionSetVersion: number; answers: Record<string, string[]> };
@@ -12,16 +15,26 @@ const FIELD = 'travelerProfile';
 
 @Injectable()
 export class WizardService {
-  constructor(@Inject(QUESTION_SET) private readonly set: QuestionSet) {}
+  /** The contract question set in each locale, resolved once (the set never changes at runtime). */
+  private readonly resolved: Record<Locale, QuestionSet>;
 
-  getQuestionSet(): QuestionSet {
-    return this.set;
+  constructor(@Inject(QUESTION_SET) private readonly set: LocalizedQuestionSet) {
+    this.resolved = Object.fromEntries(SUPPORTED_LOCALES.map((l) => [l, resolveQuestionSet(set, l)])) as Record<
+      Locale,
+      QuestionSet
+    >;
+  }
+
+  /** The question set with every title and label in `locale`. */
+  getQuestionSet(locale: Locale): QuestionSet {
+    return this.resolved[locale];
   }
 
   /**
-   * Validates a client profile against the current question set and returns it with its
-   * persona. Throws VALIDATION with one field per problem (`travelerProfile.answers.<id>`).
-   * The returned answers are a fresh object holding only known questions.
+   * Validates a client profile against the current question set and returns it as stored, with
+   * its persona KEY (see `presentProfile` for responses). Throws VALIDATION with one field per
+   * problem (`travelerProfile.answers.<id>`). The returned answers are a fresh object holding
+   * only known questions.
    */
   buildProfile(input: TravelerProfileInput): TravelerProfile {
     const fields: Record<string, string> = {};
@@ -54,5 +67,29 @@ export class WizardService {
 
     if (Object.keys(fields).length > 0) throw new AppError('VALIDATION', 'Some fields are invalid', fields);
     return { questionSetVersion: this.set.version, answers, persona: computePersona(this.set, answers) };
+  }
+
+  /**
+   * A stored profile as the API returns it: the persona as its label in `locale`. Stored
+   * personas are keys; older rows hold the English label, which maps back to its key. An
+   * unknown persona value is returned as null (see `personaLabel`). Returns a fresh object.
+   */
+  presentProfile(stored: TravelerProfile | null, locale: Locale): TravelerProfile | null {
+    if (!stored) return null;
+    return {
+      questionSetVersion: stored.questionSetVersion,
+      answers: stored.answers,
+      persona: personaLabel(this.set, stored.persona ?? null, locale),
+    };
+  }
+
+  /**
+   * A stored profile with its persona normalized to a key, for writing back: a legacy label
+   * becomes its key; an unknown value is kept as is (never lose stored data on write).
+   */
+  normalizeProfile(stored: TravelerProfile | null): TravelerProfile | null {
+    if (!stored?.persona) return stored;
+    const key = personaKey(this.set, stored.persona);
+    return key === null || key === stored.persona ? stored : { ...stored, persona: key };
   }
 }

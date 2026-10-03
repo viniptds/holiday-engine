@@ -1,7 +1,7 @@
 import { Trip } from '../trips/trip.entity.js';
 import type { UserProfile } from '../app-common/auth-user.js';
 import { TripMember } from './trip-member.entity.js';
-import { AppTripDto, MEMBER_PREVIEW_SIZE, MemberSummary, TripRole } from './app-trips.types.js';
+import { AppTripDto, MEMBER_PREVIEW_SIZE, MemberSummary, TravelerProfile, TripRole } from './app-trips.types.js';
 
 /** Owner first, then by join date (oldest first); user id breaks ties so the order is stable. */
 export function compareMembers(a: TripMember, b: TripMember): number {
@@ -26,8 +26,17 @@ export function toMemberSummary(member: TripMember, profile: UserProfile | undef
   };
 }
 
-/** Maps a trip to the app API `Trip` shape. */
-export function toAppTripDto(trip: Trip, myRole: TripRole, members: MemberSummary[], memberCount: number): AppTripDto {
+/**
+ * Maps a trip to the app API `Trip` shape. `travelerProfile` is the trip's profile as returned
+ * (persona label in the request's language), not the stored one.
+ */
+export function toAppTripDto(
+  trip: Trip,
+  myRole: TripRole,
+  members: MemberSummary[],
+  memberCount: number,
+  travelerProfile: TravelerProfile | null,
+): AppTripDto {
   return {
     id: trip.id,
     destination: trip.destination,
@@ -37,7 +46,7 @@ export function toAppTripDto(trip: Trip, myRole: TripRole, members: MemberSummar
     story: trip.story ?? null,
     partyType: trip.partyType ?? null,
     partySize: trip.partySize ?? null,
-    travelerProfile: trip.travelerProfile ?? null,
+    travelerProfile,
     myRole,
     members,
     memberCount,

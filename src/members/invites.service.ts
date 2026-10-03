@@ -6,6 +6,7 @@ import { IsNull, MoreThan, Repository } from 'typeorm';
 import { AppError } from '../app-common/app-error.js';
 import { USER_DIRECTORY } from '../app-common/auth-user.js';
 import type { AuthUser, UserDirectory } from '../app-common/auth-user.js';
+import type { Locale } from '../app-common/locale.js';
 import { TripMember } from '../app-trips/trip-member.entity.js';
 import { AppTripsService } from '../app-trips/app-trips.service.js';
 import type { AppTripDto } from '../app-trips/app-trips.types.js';
@@ -127,9 +128,10 @@ export class InvitesService {
    * Joins the trip with the invite's role and returns it. An existing member gets the trip
    * unchanged (the invite isn't used up). An email invite only works for the account with that
    * email (FORBIDDEN otherwise, invite left unused) and is claimed with a conditional update
-   * inside the transaction, so two concurrent accepts can't both use it.
+   * inside the transaction, so two concurrent accepts can't both use it. The trip is returned
+   * in `locale` (the request's language).
    */
-  async accept(user: AuthUser, token: string): Promise<AppTripDto> {
+  async accept(user: AuthUser, token: string, locale: Locale): Promise<AppTripDto> {
     const now = new Date();
     let tripId: string;
     try {
@@ -162,7 +164,7 @@ export class InvitesService {
       // A concurrent accept by the same user added the membership first.
       tripId = (await this.findAny(token)).tripId;
     }
-    return this.appTrips.get(user, tripId);
+    return this.appTrips.get(user, tripId, locale);
   }
 
   private async findUsable(
