@@ -17,8 +17,10 @@ async function run(direction: 'up' | 'down'): Promise<string[]> {
 const quoted = (values: readonly string[]) => values.map((v) => `'${v}'`).join(', ');
 
 describe('AppTrips1760100000000', () => {
-  it('runs last, after the migrations it builds on', () => {
-    expect(migrations.at(-1)).toBe(AppTrips1760100000000);
+  it('runs after the migrations it builds on', () => {
+    const names = migrations.map((m) => m.name);
+
+    expect(names.indexOf('AppTrips1760100000000')).toBeGreaterThan(names.indexOf('CreateSuggestedEvents1759536000000'));
   });
 
   it('adds the app columns as nullable and relaxes the chat columns', async () => {

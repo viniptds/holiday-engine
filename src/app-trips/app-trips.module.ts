@@ -18,5 +18,6 @@ import { WizardModule } from '../wizard/wizard.module.js';
     // TEMPORARY until the users module provides USER_DIRECTORY (gate G1).
     { provide: USER_DIRECTORY, useClass: StubUserDirectory },
   ],
+  exports: [AppTripsService, USER_DIRECTORY],
 })
 export class AppTripsModule {}

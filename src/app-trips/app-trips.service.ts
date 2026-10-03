@@ -68,13 +68,13 @@ export class AppTripsService {
   }
 
   async get(user: AuthUser, tripId: string): Promise<AppTripDto> {
-    const [dto] = await this.present([await this.membership(user, tripId)]);
+    const [dto] = await this.present([await this.requireMembership(user, tripId)]);
     return dto;
   }
 
   /** Owners and editors only. Omitted fields are kept; null clears the nullable ones. */
   async update(user: AuthUser, tripId: string, data: UpdateAppTripDto): Promise<AppTripDto> {
-    const membership = await this.membership(user, tripId, ['owner', 'editor']);
+    const membership = await this.requireMembership(user, tripId, ['owner', 'editor']);
     const trip = membership.trip!;
     if (data.destination !== undefined) trip.destination = data.destination;
     if (data.startDate !== undefined) trip.startDate = data.startDate;
@@ -105,7 +105,7 @@ export class AppTripsService {
 
   /** Owner only. Members and suggested events go with the trip (ON DELETE CASCADE). */
   async delete(user: AuthUser, tripId: string): Promise<void> {
-    const membership = await this.membership(user, tripId, ['owner']);
+    const membership = await this.requireMembership(user, tripId, ['owner']);
     await this.trips.delete({ id: membership.tripId });
   }
 
@@ -118,7 +118,7 @@ export class AppTripsService {
    * The user's membership of the trip, with the trip loaded. Not a member (or a malformed id)
    * → NOT_FOUND; a member without one of `roles` → FORBIDDEN.
    */
-  private async membership(user: AuthUser, tripId: string, roles?: TripRole[]): Promise<TripMember> {
+  async requireMembership(user: AuthUser, tripId: string, roles?: TripRole[]): Promise<TripMember> {
     // Non-UUID ids would make Postgres throw; treat them as not found.
     if (!isUUID(tripId, '4')) throw tripNotFound();
     const membership = await this.members.findOne({
