@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "questions": [
+    {
+      "id": "pace",
+      "title": { "en": "What's your travel pace?", "pt-BR": "Qual é o seu ritmo de viagem?", "es": "¿Cuál es tu ritmo de viaje?" },
+      "type": "single",
+      "options": [
+        { "id": "slow", "label": { "en": "Slow and easy", "pt-BR": "Com calma", "es": "Con calma" }, "icon": "coffee", "tags": ["relaxer"] },
+        { "id": "balanced", "label": { "en": "A bit of both", "pt-BR": "Um pouco de tudo", "es": "Un poco de todo" }, "icon": "scale" },
+        { "id": "packed", "label": { "en": "See it all", "pt-BR": "Ver tudo", "es": "Verlo todo" }, "icon": "zap", "tags": ["explorer"] }
+      ]
+    },
+    {
+      "id": "interests",
+      "title": { "en": "What makes a great day?", "pt-BR": "O que faz um dia incrível?", "es": "¿Qué hace un gran día?" },
+      "type": "multi",
+      "max": 3,
+      "options": [
+        { "id": "food", "label": { "en": "Food", "pt-BR": "Comida", "es": "Comida" }, "icon": "utensils", "tags": ["foodie"] },
+        { "id": "culture", "label": { "en": "Culture", "pt-BR": "Cultura", "es": "Cultura" }, "icon": "landmark", "tags": ["explorer"] },
+        { "id": "nature", "label": { "en": "Nature", "pt-BR": "Natureza", "es": "Naturaleza" }, "icon": "mountain", "tags": ["adventurer"] },
+        { "id": "beach", "label": { "en": "Beach", "pt-BR": "Praia", "es": "Playa" }, "icon": "sun", "tags": ["relaxer"] },
+        { "id": "nightlife", "label": { "en": "Nightlife", "pt-BR": "Vida noturna", "es": "Vida nocturna" }, "icon": "music" }
+      ]
+    },
+    {
+      "id": "budget",
+      "title": { "en": "How do you like to spend?", "pt-BR": "Como você gosta de gastar?", "es": "¿Cómo te gusta gastar?" },
+      "type": "single",
+      "options": [
+        { "id": "saver", "label": { "en": "Smart saver", "pt-BR": "Econômico", "es": "Ahorrador" }, "icon": "piggy-bank" },
+        { "id": "comfort", "label": { "en": "Comfort first", "pt-BR": "Conforto primeiro", "es": "Comodidad ante todo" }, "icon": "sofa", "tags": ["relaxer"] },
+        { "id": "treat", "label": { "en": "Treat yourself", "pt-BR": "Se dar um mimo", "es": "Darte un gusto" }, "icon": "gem" }
+      ]
+    }
+  ],
+  "personas": {
+    "relaxer": { "en": "Easygoing Wanderer", "pt-BR": "Espírito tranquilo", "es": "Espíritu tranquilo" },
+    "explorer": { "en": "Curious Explorer", "pt-BR": "Curiosidade sem fim", "es": "Curiosidad sin fin" },
+    "foodie": { "en": "Taste Hunter", "pt-BR": "Paladar aventureiro", "es": "Paladar aventurero" },
+    "adventurer": { "en": "Trail Seeker", "pt-BR": "Pé na trilha", "es": "Alma senderista" }
+  }
+}

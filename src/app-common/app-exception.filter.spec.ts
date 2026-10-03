@@ -1,0 +1,75 @@
+import { BadRequestException, HttpException, HttpStatus, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { AppError } from './app-error.js';
+import { toAppErrorBody } from './app-exception.filter.js';
+import { appValidationPipe } from './app-validation.pipe.js';
+import { IsString, MaxLength } from 'class-validator';
+
+class SampleDto {
+  @IsString()
+  @MaxLength(3)
+  name: string;
+}
+
+describe('toAppErrorBody', () => {
+  it('maps an AppError to its status and body, keeping fields', () => {
+    expect(toAppErrorBody(new AppError('CONFLICT', 'Already there', { email: 'taken' }))).toEqual({
+      status: 409,
+      body: { code: 'CONFLICT', message: 'Already there', fields: { email: 'taken' } },
+    });
+  });
+
+  it.each([
+    [new BadRequestException('bad'), 400, 'VALIDATION'],
+    [new UnauthorizedException(), 401, 'UNAUTHENTICATED'],
+    [new NotFoundException('Trip not found'), 404, 'NOT_FOUND'],
+    [new HttpException('Slow down', HttpStatus.TOO_MANY_REQUESTS), 429, 'RATE_LIMITED'],
+  ])('maps %s', (exception, status, code) => {
+    expect(toAppErrorBody(exception)).toMatchObject({ status, body: { code } });
+  });
+
+  it('maps RATE_LIMITED to 429', () => {
+    expect(toAppErrorBody(new AppError('RATE_LIMITED', 'Too many invites'))).toEqual({
+      status: 429,
+      body: { code: 'RATE_LIMITED', message: 'Too many invites' },
+    });
+  });
+
+  it('maps AI_UNAVAILABLE to 503', () => {
+    expect(toAppErrorBody(new AppError('AI_UNAVAILABLE', 'Try again later'))).toEqual({
+      status: 503,
+      body: { code: 'AI_UNAVAILABLE', message: 'Try again later' },
+    });
+  });
+
+  it('adds Retry-After in whole seconds (at least 1)', () => {
+    expect(toAppErrorBody(new AppError('RATE_LIMITED', 'Slow down', undefined, { retryAfterSeconds: 89.2 })).headers).toEqual({
+      'Retry-After': '90',
+    });
+    expect(toAppErrorBody(new AppError('RATE_LIMITED', 'Slow down', undefined, { retryAfterSeconds: 0 })).headers).toEqual({
+      'Retry-After': '1',
+    });
+  });
+
+  it('hides unexpected errors behind INTERNAL', () => {
+    expect(toAppErrorBody(new Error('db password is hunter2'))).toEqual({
+      status: 500,
+      body: { code: 'INTERNAL', message: 'Something went wrong' },
+    });
+  });
+});
+
+describe('appValidationPipe', () => {
+  const run = (value: unknown) =>
+    appValidationPipe.transform(value, { type: 'body', metatype: SampleDto });
+
+  it('reports field errors as VALIDATION', async () => {
+    await expect(run({ name: 'toolong' })).rejects.toMatchObject({
+      code: 'VALIDATION',
+      fields: { name: expect.any(String) },
+    });
+  });
+
+  it('rejects unknown fields', async () => {
+    await expect(run({ name: 'ok', extra: 1 })).rejects.toMatchObject({ code: 'VALIDATION', fields: { extra: expect.any(String) } });
+  });
+});
