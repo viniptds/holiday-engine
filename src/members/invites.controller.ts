@@ -3,12 +3,12 @@ import { APP_PREFIX } from '../app-common/auth-user.js';
 import type { AuthUser } from '../app-common/auth-user.js';
 import { AppExceptionFilter } from '../app-common/app-exception.filter.js';
 import { appValidationPipe } from '../app-common/app-validation.pipe.js';
+import { RequestLocale } from '../app-common/locale.js';
+import type { Locale } from '../app-common/locale.js';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { AppTripDto } from '../app-trips/app-trips.types.js';
 import { InvitesService } from './invites.service.js';
-import { RequestLocale } from '../app-common/locale.js';
-import type { Locale } from '../app-common/locale.js';
 import { CreateInviteDto } from './dto/create-invite.dto.js';
 import { InviteDto, InvitePreviewDto, InviteSummaryDto } from './members.types.js';
 
@@ -47,7 +47,7 @@ export class InvitesController {
 
   @Post('invites/:token/accept')
   @HttpCode(HttpStatus.OK)
-  accept(@CurrentUser() user: AuthUser, @Param('token') token: string): Promise<AppTripDto> {
-    return this.invites.accept(user, token);
+  accept(@CurrentUser() user: AuthUser, @Param('token') token: string, @RequestLocale() locale: Locale): Promise<AppTripDto> {
+    return this.invites.accept(user, token, locale);
   }
 }

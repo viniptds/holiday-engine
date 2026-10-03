@@ -16,35 +16,7 @@ const directory: UserDirectory = {
 import type { TripRole } from './app-trips.types.js';
 import { WizardService } from '../wizard/wizard.service.js';
 import { QUESTION_SET } from '../wizard/wizard.types.js';
-import type { QuestionSet } from '../wizard/wizard.types.js';
-
-// A small question set, so these tests don't depend on the bundled questions.json.
-const QUESTIONS: QuestionSet = {
-  version: 1,
-  questions: [
-    {
-      id: 'pace',
-      title: 'Pace?',
-      type: 'single',
-      options: [
-        { id: 'slow', label: 'Slow', icon: 's', tags: ['relaxer'] },
-        { id: 'packed', label: 'Packed', icon: 'p', tags: ['adventurer'] },
-      ],
-    },
-    {
-      id: 'interests',
-      title: 'Interests?',
-      type: 'multi',
-      max: 2,
-      options: [
-        { id: 'food', label: 'Food', icon: 'f', tags: ['foodie'] },
-        { id: 'beach', label: 'Beach', icon: 'b', tags: ['relaxer'] },
-        { id: 'hiking', label: 'Hiking', icon: 'h', tags: ['adventurer'] },
-      ],
-    },
-  ],
-  personas: { relaxer: 'Easygoing Wanderer', foodie: 'Taste Hunter', adventurer: 'Trail Seeker' },
-};
+import { TEST_QUESTIONS as QUESTIONS } from '../testing/wizard-questions.js';
 
 const TRIP_ID = '0b4f8c1e-3c2a-4f7e-9d1a-2b3c4d5e6f70';
 const ME = { id: '7d0c5a8e-1f2b-4c3d-8e9f-0a1b2c3d4e5f', email: 'me@example.com' };
@@ -132,7 +104,7 @@ describe('AppTripsService', () => {
     it('saves the trip and the owner membership with the same transactional manager', async () => {
       members.find.mockResolvedValueOnce([makeMember(ME.id, 'owner')]);
 
-      await service.create(ME, data);
+      await service.create(ME, data, 'en');
 
       expect(transaction).toHaveBeenCalledTimes(1);
       expect(manager.save).toHaveBeenCalledTimes(2);
@@ -150,7 +122,7 @@ describe('AppTripsService', () => {
     it('defaults the optional fields to null', async () => {
       members.find.mockResolvedValueOnce([makeMember(ME.id, 'owner')]);
 
-      await service.create(ME, data);
+      await service.create(ME, data, 'en');
 
       expect(manager.save.mock.calls[0][0]).toMatchObject({
         notes: null,
@@ -172,22 +144,32 @@ describe('AppTripsService', () => {
         partyType: 'family',
         partySize: 4,
         travelerProfile: { questionSetVersion: 1, answers },
-      });
+      }, 'en');
 
       expect(manager.save.mock.calls[0][0]).toMatchObject({
         notes: 'n',
         story: 's',
         partyType: 'family',
         partySize: 4,
-        // relaxer and foodie tie at 1; relaxer is listed first in personas.
-        travelerProfile: { questionSetVersion: 1, answers, persona: 'Easygoing Wanderer' },
+        // relaxer and foodie tie at 1; relaxer is listed first in personas. The key is stored, not a label.
+        travelerProfile: { questionSetVersion: 1, answers, persona: 'relaxer' },
       });
       expect(dto.travelerProfile).toEqual({ questionSetVersion: 1, answers, persona: 'Easygoing Wanderer' });
     });
 
+    it('returns the persona label in the request locale, storing the key', async () => {
+      members.find.mockResolvedValueOnce([makeMember(ME.id, 'owner')]);
+      const travelerProfile = { questionSetVersion: 1, answers: { pace: ['packed'] } };
+
+      const dto = await service.create(ME, { ...data, travelerProfile }, 'pt-BR');
+
+      expect(manager.save.mock.calls[0][0]).toMatchObject({ travelerProfile: { ...travelerProfile, persona: 'adventurer' } });
+      expect(dto.travelerProfile).toEqual({ ...travelerProfile, persona: 'Desbravador de trilhas' });
+    });
+
     it('rejects a profile that does not match the question set, before any write', async () => {
       await expect(
-        service.create(ME, { ...data, travelerProfile: { questionSetVersion: 2, answers: { pace: ['fast'] } } }),
+        service.create(ME, { ...data, travelerProfile: { questionSetVersion: 2, answers: { pace: ['fast'] } } }, 'en'),
       ).rejects.toMatchObject({
         code: 'VALIDATION',
         fields: {
@@ -201,7 +183,7 @@ describe('AppTripsService', () => {
     it('returns the trip with the caller as its only member and owner', async () => {
       members.find.mockResolvedValueOnce([makeMember(ME.id, 'owner')]);
 
-      const dto = await service.create(ME, data);
+      const dto = await service.create(ME, data, 'en');
 
       expect(dto).toMatchObject({
         id: TRIP_ID,
@@ -215,7 +197,7 @@ describe('AppTripsService', () => {
     it('fails without a response when the membership insert fails (the transaction rolls back)', async () => {
       manager.save.mockImplementationOnce(async (trip) => trip).mockRejectedValueOnce(new Error('insert failed'));
 
-      await expect(service.create(ME, data)).rejects.toThrow('insert failed');
+      await expect(service.create(ME, data, 'en')).rejects.toThrow('insert failed');
       expect(members.find).not.toHaveBeenCalled();
       expect(trips.save).not.toHaveBeenCalled();
     });
@@ -223,7 +205,7 @@ describe('AppTripsService', () => {
 
   describe('list', () => {
     it('queries the user memberships with their trips, by startDate', async () => {
-      await expect(service.list(ME)).resolves.toEqual([]);
+      await expect(service.list(ME, 'en')).resolves.toEqual([]);
 
       expect(members.find).toHaveBeenCalledWith({
         where: { userId: ME.id },
@@ -249,7 +231,7 @@ describe('AppTripsService', () => {
           makeMember(ME.id, 'editor', undefined, second),
         ]);
 
-      const result = await service.list(ME);
+      const result = await service.list(ME, 'en');
 
       expect(result.map((t) => [t.id, t.myRole, t.memberCount])).toEqual([
         [TRIP_ID, 'viewer', 2],
@@ -263,20 +245,20 @@ describe('AppTripsService', () => {
     it.each<TripRole>(['owner', 'editor', 'viewer'])('returns the trip to a %s', async (role) => {
       given(membershipOf(role));
 
-      await expect(service.get(ME, TRIP_ID)).resolves.toMatchObject({ id: TRIP_ID, myRole: role });
+      await expect(service.get(ME, TRIP_ID, 'en')).resolves.toMatchObject({ id: TRIP_ID, myRole: role });
       expect(members.findOne).toHaveBeenCalledWith({ where: { tripId: TRIP_ID, userId: ME.id }, relations: { trip: true } });
     });
 
     it('is NOT_FOUND for a non-member', async () => {
       given(null);
 
-      await expect(service.get(ME, TRIP_ID)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      await expect(service.get(ME, TRIP_ID, 'en')).rejects.toMatchObject({ code: 'NOT_FOUND' });
     });
 
     it.each(['nope', '00000000-0000-0000-0000-000000000000', `${TRIP_ID}x`])(
       'is NOT_FOUND for the malformed id %s, without querying',
       async (id) => {
-        await expect(service.get(ME, id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+        await expect(service.get(ME, id, 'en')).rejects.toMatchObject({ code: 'NOT_FOUND' });
         expect(members.findOne).not.toHaveBeenCalled();
       },
     );
@@ -295,7 +277,7 @@ describe('AppTripsService', () => {
       all[4].joinedAt = new Date('2026-10-10T00:00:00.000Z');
       given(membershipOf('owner'), all);
 
-      const dto = await service.get(ME, TRIP_ID);
+      const dto = await service.get(ME, TRIP_ID, 'en');
 
       expect(dto.memberCount).toBe(7);
       expect(dto.members.map((m) => [m.userId, m.role])).toEqual([
@@ -311,7 +293,7 @@ describe('AppTripsService', () => {
     it('returns exactly the contract Trip fields, with ISO timestamps', async () => {
       given(membershipOf('editor'));
 
-      const dto = await service.get(ME, TRIP_ID);
+      const dto = await service.get(ME, TRIP_ID, 'en');
 
       expect(dto).toEqual({
         id: TRIP_ID,
@@ -330,13 +312,33 @@ describe('AppTripsService', () => {
         updatedAt: '2026-10-03T11:00:00.000Z',
       });
     });
+
+    it.each([
+      ['en', 'relaxer', 'Easygoing Wanderer'],
+      ['pt-BR', 'relaxer', 'Viajante tranquilo'],
+      ['es', 'relaxer', 'Viajero relajado'],
+      // Rows saved before keys were stored hold the English label; it maps back to its key.
+      ['pt-BR', 'Easygoing Wanderer', 'Viajante tranquilo'],
+      ['es', 'Taste Hunter', 'Cazador de sabores'],
+      ['en', 'Trail Seeker', 'Trail Seeker'],
+      // Unknown values (e.g. a persona since removed) come back as null.
+      ['en', 'Retired Persona', null],
+    ] as const)('returns in %s the persona stored as %p as %p', async (locale, stored, label) => {
+      const travelerProfile = { questionSetVersion: 1, answers: {}, persona: stored };
+      given(membershipOf('viewer', makeTrip({ travelerProfile })));
+
+      const dto = await service.get(ME, TRIP_ID, locale);
+
+      expect(dto.travelerProfile).toEqual({ questionSetVersion: 1, answers: {}, persona: label });
+      expect(trips.save).not.toHaveBeenCalled();
+    });
   });
 
   describe('update', () => {
     it.each<TripRole>(['owner', 'editor'])('lets a %s edit', async (role) => {
       given(membershipOf(role));
 
-      const dto = await service.update(ME, TRIP_ID, { destination: 'Porto' });
+      const dto = await service.update(ME, TRIP_ID, { destination: 'Porto' }, 'en');
 
       expect(dto).toMatchObject({ destination: 'Porto', myRole: role });
       expect(trips.save).toHaveBeenCalledWith(expect.objectContaining({ id: TRIP_ID, destination: 'Porto' }));
@@ -345,14 +347,14 @@ describe('AppTripsService', () => {
     it('is FORBIDDEN for a viewer', async () => {
       given(membershipOf('viewer'));
 
-      await expect(service.update(ME, TRIP_ID, { destination: 'Porto' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(service.update(ME, TRIP_ID, { destination: 'Porto' }, 'en')).rejects.toMatchObject({ code: 'FORBIDDEN' });
       expect(trips.save).not.toHaveBeenCalled();
     });
 
     it('is NOT_FOUND for a non-member', async () => {
       given(null);
 
-      await expect(service.update(ME, TRIP_ID, { destination: 'Porto' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      await expect(service.update(ME, TRIP_ID, { destination: 'Porto' }, 'en')).rejects.toMatchObject({ code: 'NOT_FOUND' });
       expect(trips.save).not.toHaveBeenCalled();
     });
 
@@ -365,7 +367,7 @@ describe('AppTripsService', () => {
         partyType: null,
         partySize: null,
         travelerProfile: null,
-      });
+      }, 'en');
 
       expect(dto).toMatchObject({ notes: null, story: null, partyType: null, partySize: null, travelerProfile: null });
     });
@@ -373,7 +375,7 @@ describe('AppTripsService', () => {
     it('keeps omitted fields', async () => {
       given(membershipOf('owner'));
 
-      const dto = await service.update(ME, TRIP_ID, { partySize: 3 });
+      const dto = await service.update(ME, TRIP_ID, { partySize: 3 }, 'en');
 
       expect(dto).toMatchObject({ destination: 'Lisbon', notes: 'old notes', story: 'old story', partyType: 'couple', partySize: 3 });
     });
@@ -381,23 +383,46 @@ describe('AppTripsService', () => {
     it('replaces the traveler profile, recomputing the persona', async () => {
       given(membershipOf('owner', makeTrip({ travelerProfile: { questionSetVersion: 1, answers: {}, persona: 'Taste Hunter' } })));
 
-      const dto = await service.update(ME, TRIP_ID, { travelerProfile: { questionSetVersion: 1, answers: { pace: ['packed'] } } });
+      const dto = await service.update(ME, TRIP_ID, { travelerProfile: { questionSetVersion: 1, answers: { pace: ['packed'] } } }, 'en');
 
       expect(dto.travelerProfile).toEqual({ questionSetVersion: 1, answers: { pace: ['packed'] }, persona: 'Trail Seeker' });
     });
 
     it('keeps the stored persona when travelerProfile is omitted', async () => {
-      const travelerProfile = { questionSetVersion: 1, answers: { pace: ['slow'] }, persona: 'Easygoing Wanderer' };
+      const travelerProfile = { questionSetVersion: 1, answers: { pace: ['slow'] }, persona: 'relaxer' };
       given(membershipOf('owner', makeTrip({ travelerProfile })));
 
-      await expect(service.update(ME, TRIP_ID, { notes: 'x' })).resolves.toMatchObject({ travelerProfile });
+      await expect(service.update(ME, TRIP_ID, { notes: 'x' }, 'es')).resolves.toMatchObject({
+        travelerProfile: { ...travelerProfile, persona: 'Viajero relajado' },
+      });
+      expect(trips.save.mock.calls[0][0].travelerProfile).toEqual(travelerProfile);
+    });
+
+    it('rewrites a legacy English persona label to its key when saving', async () => {
+      const legacy = { questionSetVersion: 1, answers: { pace: ['slow'] }, persona: 'Easygoing Wanderer' };
+      given(membershipOf('owner', makeTrip({ travelerProfile: legacy })));
+
+      const dto = await service.update(ME, TRIP_ID, { notes: 'x' }, 'pt-BR');
+
+      expect(trips.save.mock.calls[0][0].travelerProfile).toEqual({ ...legacy, persona: 'relaxer' });
+      expect(dto.travelerProfile).toEqual({ ...legacy, persona: 'Viajante tranquilo' });
+    });
+
+    it('keeps an unknown stored persona on save but returns it as null', async () => {
+      const unknown = { questionSetVersion: 1, answers: {}, persona: 'Retired Persona' };
+      given(membershipOf('owner', makeTrip({ travelerProfile: unknown })));
+
+      const dto = await service.update(ME, TRIP_ID, { notes: 'x' }, 'en');
+
+      expect(trips.save.mock.calls[0][0].travelerProfile).toEqual(unknown);
+      expect(dto.travelerProfile).toEqual({ ...unknown, persona: null });
     });
 
     it('rejects an invalid profile without saving', async () => {
       given(membershipOf('editor'));
 
       await expect(
-        service.update(ME, TRIP_ID, { travelerProfile: { questionSetVersion: 1, answers: { interests: ['food', 'food'] } } }),
+        service.update(ME, TRIP_ID, { travelerProfile: { questionSetVersion: 1, answers: { interests: ['food', 'food'] } } }, 'en'),
       ).rejects.toMatchObject({ code: 'VALIDATION', fields: { 'travelerProfile.answers.interests': expect.any(String) } });
       expect(trips.save).not.toHaveBeenCalled();
     });
@@ -406,14 +431,14 @@ describe('AppTripsService', () => {
       given(membershipOf('viewer'));
 
       await expect(
-        service.update(ME, TRIP_ID, { travelerProfile: { questionSetVersion: 9, answers: {} } }),
+        service.update(ME, TRIP_ID, { travelerProfile: { questionSetVersion: 9, answers: {} } }, 'en'),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
 
     it('rejects an endDate before the stored startDate', async () => {
       given(membershipOf('owner'));
 
-      await expect(service.update(ME, TRIP_ID, { endDate: '2026-10-31' })).rejects.toMatchObject({
+      await expect(service.update(ME, TRIP_ID, { endDate: '2026-10-31' }, 'en')).rejects.toMatchObject({
         code: 'VALIDATION',
         fields: { endDate: 'endDate must be on or after startDate' },
       });
@@ -422,19 +447,19 @@ describe('AppTripsService', () => {
 
     it('applies the 365-day cap against the stored dates', async () => {
       given(membershipOf('owner'));
-      await expect(service.update(ME, TRIP_ID, { startDate: '2025-11-04' })).rejects.toMatchObject({
+      await expect(service.update(ME, TRIP_ID, { startDate: '2025-11-04' }, 'en')).rejects.toMatchObject({
         code: 'VALIDATION',
         fields: { startDate: 'endDate must be at most 365 days after startDate' },
       });
 
       given(membershipOf('owner'));
-      await expect(service.update(ME, TRIP_ID, { endDate: '2027-11-02' })).rejects.toMatchObject({
+      await expect(service.update(ME, TRIP_ID, { endDate: '2027-11-02' }, 'en')).rejects.toMatchObject({
         code: 'VALIDATION',
         fields: { endDate: 'endDate must be at most 365 days after startDate' },
       });
 
       given(membershipOf('owner'));
-      await expect(service.update(ME, TRIP_ID, { startDate: '2025-11-05' })).resolves.toMatchObject({
+      await expect(service.update(ME, TRIP_ID, { startDate: '2025-11-05' }, 'en')).resolves.toMatchObject({
         startDate: '2025-11-05',
         endDate: '2026-11-05',
       });

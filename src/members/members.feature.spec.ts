@@ -104,7 +104,11 @@ describe('Members and invites API (feature)', () => {
   };
 
   /** A trip owned by `owner`; other members join one minute apart, in order. */
-  function seedTrip(owner = OWNER, others: [string, TripRole][] = [[EDITOR, 'editor'], [VIEWER, 'viewer']]): string {
+  function seedTrip(
+    owner = OWNER,
+    others: [string, TripRole][] = [[EDITOR, 'editor'], [VIEWER, 'viewer']],
+    fields: Partial<Trip> = {},
+  ): string {
     const trip = db.seed(Trip, {
       provider: null,
       chatId: null,
@@ -112,6 +116,7 @@ describe('Members and invites API (feature)', () => {
       destination: 'Lisbon',
       startDate: '2026-11-01',
       endDate: '2026-11-05',
+      ...fields,
     });
     [[owner, 'owner'] as [string, TripRole], ...others].forEach(([userId, role], i) =>
       db.seed(TripMember, { tripId: trip.id, userId, role, joinedAt: new Date(Date.UTC(2026, 9, 1, 10, i)) }),
@@ -829,6 +834,25 @@ describe('Members and invites API (feature)', () => {
       expect(res.status).toBe(200);
       expect(await res.json()).toMatchObject({ id, myRole: 'viewer', memberCount: 4 });
       expect(roleOf(id, NEWCOMER)).toBe('viewer');
+    });
+
+    it.each([
+      ['relaxer', 'pt-BR', 'Viajante tranquilo'],
+      // A row saved before persona keys holds the English label.
+      ['Easygoing Wanderer', 'es-419', 'Viajero relajado'],
+      ['foodie', 'fr', 'Taste Hunter'],
+    ])('returns the persona stored as %p in Accept-Language %p', async (persona, language, label) => {
+      const travelerProfile = { questionSetVersion: 1, answers: {}, persona };
+      const id = seedTrip(OWNER, [], { travelerProfile });
+      const token = seedInvite(id);
+
+      const res = await fetch(`${baseUrl}/invites/${token}/accept`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${tokens[NEWCOMER]}`, 'accept-language': language },
+      });
+
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as AppTripDto).travelerProfile).toEqual({ ...travelerProfile, persona: label });
     });
 
     it('lets several users use a link invite until it expires', async () => {

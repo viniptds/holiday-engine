@@ -16,7 +16,11 @@ export type TravelerProfile = {
   questionSetVersion: number;
   /** questionId -> option ids. */
   answers: Record<string, string[]>;
-  /** The `personas` label computed by `WizardService` from the answers' tags, or null. */
+  /**
+   * Computed by `WizardService` from the answers' tags, or null. Stored as the persona KEY
+   * (`relaxer`; rows saved earlier may hold the English label); returned by the API as the
+   * label in the request's language (`WizardService.presentProfile`).
+   */
   persona: string | null;
 };
 

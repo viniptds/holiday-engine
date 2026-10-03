@@ -1,36 +1,42 @@
 import { AppError } from '../app-common/app-error.js';
 import { WizardService } from './wizard.service.js';
-import { computePersona } from './persona.js';
-import type { QuestionSet } from './wizard.types.js';
+import { computePersona, personaKey, personaLabel } from './persona.js';
+import type { LocalizedQuestionSet } from './wizard.types.js';
+import { localized } from '../testing/wizard-questions.js';
 
-const SET: QuestionSet = {
+const SET: LocalizedQuestionSet = {
   version: 3,
   questions: [
     {
       id: 'pace',
-      title: 'Pace?',
+      title: localized('Pace?'),
       type: 'single',
       options: [
-        { id: 'slow', label: 'Slow', icon: 's', tags: ['relaxer'] },
-        { id: 'packed', label: 'Packed', icon: 'p', tags: ['adventurer'] },
-        { id: 'either', label: 'Either', icon: 'e' },
+        { id: 'slow', label: localized('Slow'), icon: 's', tags: ['relaxer'] },
+        { id: 'packed', label: localized('Packed'), icon: 'p', tags: ['adventurer'] },
+        { id: 'either', label: localized('Either'), icon: 'e' },
       ],
     },
     {
       id: 'interests',
-      title: 'Interests?',
+      title: localized('Interests?'),
       type: 'multi',
       max: 2,
       options: [
-        { id: 'food', label: 'Food', icon: 'f', tags: ['foodie'] },
-        { id: 'beach', label: 'Beach', icon: 'b', tags: ['relaxer', 'foodie'] },
-        { id: 'hiking', label: 'Hiking', icon: 'h', tags: ['adventurer'] },
-        { id: 'shops', label: 'Shops', icon: 'x' },
+        { id: 'food', label: localized('Food'), icon: 'f', tags: ['foodie'] },
+        { id: 'beach', label: localized('Beach'), icon: 'b', tags: ['relaxer', 'foodie'] },
+        { id: 'hiking', label: localized('Hiking'), icon: 'h', tags: ['adventurer'] },
+        { id: 'shops', label: localized('Shops'), icon: 'x' },
       ],
     },
   ],
   // Order matters: ties go to the first listed.
-  personas: { explorer: 'Curious Explorer', relaxer: 'Easygoing Wanderer', foodie: 'Taste Hunter', adventurer: 'Trail Seeker' },
+  personas: {
+    explorer: localized('Curious Explorer', 'Explorador curioso', 'Explorador curioso'),
+    relaxer: localized('Easygoing Wanderer', 'Viajante tranquilo', 'Viajero relajado'),
+    foodie: localized('Taste Hunter', 'Caçador de sabores', 'Cazador de sabores'),
+    adventurer: localized('Trail Seeker', 'Desbravador de trilhas', 'Buscador de senderos'),
+  },
 };
 
 describe('WizardService.buildProfile', () => {
@@ -50,15 +56,11 @@ describe('WizardService.buildProfile', () => {
     throw new Error('expected VALIDATION');
   }
 
-  it('serves the loaded question set', () => {
-    expect(wizard.getQuestionSet()).toBe(SET);
-  });
-
-  it('accepts valid answers, with questions left out, and adds the persona', () => {
+  it('accepts valid answers, with questions left out, and adds the persona key', () => {
     expect(build({ interests: ['food', 'hiking'] })).toEqual({
       questionSetVersion: 3,
       answers: { interests: ['food', 'hiking'] },
-      persona: 'Taste Hunter',
+      persona: 'foodie',
     });
     expect(build({})).toEqual({ questionSetVersion: 3, answers: {}, persona: null });
   });
@@ -122,20 +124,91 @@ describe('WizardService.buildProfile', () => {
 describe('computePersona', () => {
   it('picks the tag chosen most often across questions', () => {
     // relaxer: slow + beach = 2; foodie: beach = 1
-    expect(computePersona(SET, { pace: ['slow'], interests: ['beach'] })).toBe('Easygoing Wanderer');
+    expect(computePersona(SET, { pace: ['slow'], interests: ['beach'] })).toBe('relaxer');
     // adventurer: packed + hiking = 2; foodie: food = 1
-    expect(computePersona(SET, { pace: ['packed'], interests: ['hiking', 'food'] })).toBe('Trail Seeker');
+    expect(computePersona(SET, { pace: ['packed'], interests: ['hiking', 'food'] })).toBe('adventurer');
   });
 
   it('breaks ties by the order of personas', () => {
     // relaxer 1 (slow), foodie 1 (food): relaxer is listed before foodie.
-    expect(computePersona(SET, { pace: ['slow'], interests: ['food'] })).toBe('Easygoing Wanderer');
+    expect(computePersona(SET, { pace: ['slow'], interests: ['food'] })).toBe('relaxer');
     // adventurer 1, foodie 1: foodie is listed first.
-    expect(computePersona(SET, { pace: ['packed'], interests: ['food'] })).toBe('Taste Hunter');
+    expect(computePersona(SET, { pace: ['packed'], interests: ['food'] })).toBe('foodie');
   });
 
   it('is null when no chosen option has a tag', () => {
     expect(computePersona(SET, { pace: ['either'], interests: ['shops'] })).toBeNull();
     expect(computePersona(SET, {})).toBeNull();
+  });
+});
+
+describe('WizardService.getQuestionSet', () => {
+  const wizard = new WizardService(SET);
+
+  it.each([
+    ['en', 'Pace?', 'Slow', 'Taste Hunter'],
+    ['pt-BR', 'Pace? (pt-BR)', 'Slow (pt-BR)', 'Caçador de sabores'],
+    ['es', 'Pace? (es)', 'Slow (es)', 'Cazador de sabores'],
+  ] as const)('resolves every text to %s', (locale, title, label, foodie) => {
+    const set = wizard.getQuestionSet(locale);
+
+    expect(set.questions[0].title).toBe(title);
+    expect(set.questions[0].options[0]).toEqual({ id: 'slow', label, icon: 's', tags: ['relaxer'] });
+    expect(set.personas.foodie).toBe(foodie);
+  });
+
+  it('keeps ids, icons, tags, max, version and persona order the same in every language', () => {
+    const structure = (locale: 'en' | 'pt-BR' | 'es') => {
+      const set = wizard.getQuestionSet(locale);
+      return {
+        version: set.version,
+        questions: set.questions.map((q) => ({ id: q.id, type: q.type, max: q.max, options: q.options.map(({ label: _, ...o }) => o) })),
+        personas: Object.keys(set.personas),
+      };
+    };
+
+    expect(structure('pt-BR')).toEqual(structure('en'));
+    expect(structure('es')).toEqual(structure('en'));
+    expect(structure('en').personas).toEqual(['explorer', 'relaxer', 'foodie', 'adventurer']);
+    expect(wizard.getQuestionSet('en').questions[0]).not.toHaveProperty('max');
+  });
+});
+
+describe('WizardService.presentProfile / normalizeProfile', () => {
+  const wizard = new WizardService(SET);
+  const profile = (persona: string | null) => ({ questionSetVersion: 3, answers: { pace: ['slow'] }, persona });
+
+  it('returns the persona label in the locale, for a key or a legacy label', () => {
+    expect(wizard.presentProfile(profile('relaxer'), 'es')).toEqual(profile('Viajero relajado'));
+    expect(wizard.presentProfile(profile('Easygoing Wanderer'), 'pt-BR')).toEqual(profile('Viajante tranquilo'));
+    expect(wizard.presentProfile(profile(null), 'es')).toEqual(profile(null));
+    expect(wizard.presentProfile(profile('Someone Else'), 'en')).toEqual(profile(null));
+    expect(wizard.presentProfile(null, 'en')).toBeNull();
+  });
+
+  it('normalizes a legacy label to its key and keeps keys, null and unknown values', () => {
+    expect(wizard.normalizeProfile(profile('Trail Seeker'))).toEqual(profile('adventurer'));
+    expect(wizard.normalizeProfile(profile('adventurer'))).toEqual(profile('adventurer'));
+    expect(wizard.normalizeProfile(profile(null))).toEqual(profile(null));
+    expect(wizard.normalizeProfile(profile('Someone Else'))).toEqual(profile('Someone Else'));
+    expect(wizard.normalizeProfile(null)).toBeNull();
+  });
+});
+
+describe('personaKey / personaLabel', () => {
+  it('maps a key or a label in any locale to the key', () => {
+    expect(personaKey(SET, 'foodie')).toBe('foodie');
+    expect(personaKey(SET, 'Taste Hunter')).toBe('foodie');
+    expect(personaKey(SET, 'Caçador de sabores')).toBe('foodie');
+    expect(personaKey(SET, 'Explorador curioso')).toBe('explorer');
+    expect(personaKey(SET, 'taste hunter')).toBeNull();
+    expect(personaKey(SET, 'constructor')).toBeNull();
+  });
+
+  it('gives the label in the locale, or null for null and unknown values', () => {
+    expect(personaLabel(SET, 'Taste Hunter', 'es')).toBe('Cazador de sabores');
+    expect(personaLabel(SET, 'adventurer', 'pt-BR')).toBe('Desbravador de trilhas');
+    expect(personaLabel(SET, null, 'en')).toBeNull();
+    expect(personaLabel(SET, 'Unknown', 'en')).toBeNull();
   });
 });

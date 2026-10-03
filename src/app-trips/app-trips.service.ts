@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { In, Repository } from 'typeorm';
 import { AppError } from '../app-common/app-error.js';
+import type { Locale } from '../app-common/locale.js';
 import { USER_DIRECTORY } from '../app-common/auth-user.js';
 import type { AuthUser, UserDirectory } from '../app-common/auth-user.js';
 import { Trip } from '../trips/trip.entity.js';
@@ -19,7 +20,8 @@ const tripNotFound = () => new AppError('NOT_FOUND', 'Trip not found');
 
 /**
  * App trips. Every method is scoped by membership: a trip the user isn't a member of
- * behaves as not found. Inputs are expected to be validated with the DTOs first.
+ * behaves as not found. Inputs are expected to be validated with the DTOs first. Methods that
+ * return trips take the request's `locale`, the language of the persona label.
  */
 @Injectable()
 export class AppTripsService {
@@ -31,17 +33,17 @@ export class AppTripsService {
   ) {}
 
   /** Trips the user is a member of, by startDate ascending. */
-  async list(user: AuthUser): Promise<AppTripDto[]> {
+  async list(user: AuthUser, locale: Locale): Promise<AppTripDto[]> {
     const memberships = await this.members.find({
       where: { userId: user.id },
       relations: { trip: true },
       order: { trip: { startDate: 'ASC', createdAt: 'ASC' } },
     });
-    return this.present(memberships);
+    return this.present(memberships, locale);
   }
 
   /** Creates the trip and the caller's owner membership in one transaction. */
-  async create(user: AuthUser, data: CreateAppTripDto): Promise<AppTripDto> {
+  async create(user: AuthUser, data: CreateAppTripDto, locale: Locale): Promise<AppTripDto> {
     const travelerProfile = this.toTravelerProfile(data.travelerProfile);
     const membership = await this.trips.manager.transaction(async (manager) => {
       const trip = await manager.save(
@@ -63,17 +65,17 @@ export class AppTripsService {
       member.trip = trip;
       return member;
     });
-    const [dto] = await this.present([membership]);
+    const [dto] = await this.present([membership], locale);
     return dto;
   }
 
-  async get(user: AuthUser, tripId: string): Promise<AppTripDto> {
-    const [dto] = await this.present([await this.requireMembership(user, tripId)]);
+  async get(user: AuthUser, tripId: string, locale: Locale): Promise<AppTripDto> {
+    const [dto] = await this.present([await this.requireMembership(user, tripId)], locale);
     return dto;
   }
 
   /** Owners and editors only. Omitted fields are kept; null clears the nullable ones. */
-  async update(user: AuthUser, tripId: string, data: UpdateAppTripDto): Promise<AppTripDto> {
+  async update(user: AuthUser, tripId: string, data: UpdateAppTripDto, locale: Locale): Promise<AppTripDto> {
     const membership = await this.requireMembership(user, tripId, ['owner', 'editor']);
     const trip = membership.trip!;
     if (data.destination !== undefined) trip.destination = data.destination;
@@ -84,6 +86,8 @@ export class AppTripsService {
     if (data.partyType !== undefined) trip.partyType = data.partyType;
     if (data.partySize !== undefined) trip.partySize = data.partySize;
     if (data.travelerProfile !== undefined) trip.travelerProfile = this.toTravelerProfile(data.travelerProfile);
+    // Rewrites a legacy persona label (rows saved before keys were stored) to its key on save.
+    else trip.travelerProfile = this.wizard.normalizeProfile(trip.travelerProfile ?? null);
 
     // The DTO checks the dates when both are sent; this covers one date against the stored other.
     const dateField = data.endDate !== undefined ? 'endDate' : 'startDate';
@@ -99,7 +103,7 @@ export class AppTripsService {
     }
 
     membership.trip = await this.trips.save(trip);
-    const [dto] = await this.present([membership]);
+    const [dto] = await this.present([membership], locale);
     return dto;
   }
 
@@ -133,7 +137,7 @@ export class AppTripsService {
   }
 
   /** Builds the `Trip` responses for the given memberships (trip loaded), keeping their order. */
-  private async present(memberships: TripMember[]): Promise<AppTripDto[]> {
+  private async present(memberships: TripMember[], locale: Locale): Promise<AppTripDto[]> {
     if (memberships.length === 0) return [];
     const tripIds = [...new Set(memberships.map((m) => m.tripId))];
     const all = await this.members.find({ where: { tripId: In(tripIds) } });
@@ -156,6 +160,7 @@ export class AppTripsService {
         membership.role,
         preview.map((m) => toMemberSummary(m, profiles.get(m.userId))),
         byTrip.get(membership.tripId)?.length ?? 0,
+        this.wizard.presentProfile(membership.trip!.travelerProfile ?? null, locale),
       );
     });
   }

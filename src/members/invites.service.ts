@@ -328,8 +328,9 @@ export class InvitesService implements OnApplicationShutdown {
    * concurrent accepts can't both use it. The invite row is locked for the whole transaction, so a
    * concurrent revoke is ordered before or after the accept, never in between. Someone the owner removed can't rejoin through a link
    * invite (FORBIDDEN); accepting an email invite to them created after the removal lifts that.
+   * The trip is returned in `locale` (the request's language).
    */
-  async accept(user: AuthUser, token: string): Promise<AppTripDto> {
+  async accept(user: AuthUser, token: string, locale: Locale): Promise<AppTripDto> {
     const now = new Date();
     let tripId: string;
     try {
@@ -379,7 +380,7 @@ export class InvitesService implements OnApplicationShutdown {
       // A concurrent accept by the same user added the membership first.
       tripId = (await this.findAny(token)).tripId;
     }
-    return this.appTrips.get(user, tripId);
+    return this.appTrips.get(user, tripId, locale);
   }
 
   private async findUsable(

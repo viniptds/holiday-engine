@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { MAX_QUESTIONS, MIN_QUESTIONS, Question, QuestionOption, QuestionSet } from './wizard.types.js';
+import { SUPPORTED_LOCALES } from '../app-common/locale.js';
+import type { Locale } from '../app-common/locale.js';
+import { MAX_QUESTIONS, MIN_QUESTIONS } from './wizard.types.js';
+import type { LocalizedQuestion, LocalizedQuestionOption, LocalizedQuestionSet, LocalizedText } from './wizard.types.js';
 
 /**
  * The bundled question set. Resolved next to this module, so it works from `src/` (ts-jest,
@@ -18,27 +21,50 @@ function duplicates(values: string[]): string[] {
   return [...new Set(values.filter((value, i) => values.indexOf(value) !== i))];
 }
 
+const LOCALE_LIST = SUPPORTED_LOCALES.map((l) => `"${l}"`).join(', ');
+
+/**
+ * A user-facing text: an object with a non-empty string for every supported locale. Each problem
+ * names the text by its path (`questions[1].options[2].label is missing "es"`).
+ */
+function parseLocalized(raw: unknown, at: string, problems: string[]): LocalizedText | null {
+  if (!isObject(raw)) {
+    problems.push(`${at} must be an object with a text for each locale (${LOCALE_LIST})`);
+    return null;
+  }
+  const before = problems.length;
+  for (const key of Object.keys(raw)) {
+    if (!(SUPPORTED_LOCALES as readonly string[]).includes(key)) problems.push(`${at} has unsupported locale "${key}"`);
+  }
+  for (const locale of SUPPORTED_LOCALES) {
+    if (!isNonEmptyString(raw[locale])) problems.push(`${at} is missing "${locale}"`);
+  }
+  if (problems.length > before) return null;
+  return Object.fromEntries(SUPPORTED_LOCALES.map((locale) => [locale, raw[locale] as string])) as Record<Locale, string>;
+}
+
 /**
  * Checks a parsed question set against the contract rules and returns a clean copy (only
- * contract fields). Throws one error listing every problem found.
+ * contract fields). Every title, option label and persona label must have a text for each
+ * supported locale. Throws one error listing every problem found.
  */
-export function parseQuestionSet(raw: unknown): QuestionSet {
+export function parseQuestionSet(raw: unknown): LocalizedQuestionSet {
   const problems: string[] = [];
   if (!isObject(raw)) throw new Error('the question set must be a JSON object');
 
   if (!isPositiveInt(raw.version)) problems.push('version must be a positive integer');
 
-  const personas: Record<string, string> = {};
+  const personas: Record<string, LocalizedText> = {};
   if (!isObject(raw.personas) || Object.keys(raw.personas).length === 0) {
-    problems.push('personas must be a non-empty object of tag -> label');
+    problems.push('personas must be a non-empty object of tag -> localized label');
   } else {
     for (const [tag, label] of Object.entries(raw.personas)) {
-      if (!isNonEmptyString(label)) problems.push(`personas.${tag} must be a non-empty label`);
-      else personas[tag] = label;
+      const localized = parseLocalized(label, `personas.${tag}`, problems);
+      if (localized) personas[tag] = localized;
     }
   }
 
-  const questions: Question[] = [];
+  const questions: LocalizedQuestion[] = [];
   if (!Array.isArray(raw.questions)) {
     problems.push('questions must be an array');
   } else {
@@ -56,7 +82,7 @@ export function parseQuestionSet(raw: unknown): QuestionSet {
   return { version: raw.version as number, questions, personas };
 }
 
-function parseQuestion(raw: unknown, at: string, personas: unknown, problems: string[]): Question | null {
+function parseQuestion(raw: unknown, at: string, personas: unknown, problems: string[]): LocalizedQuestion | null {
   if (!isObject(raw)) {
     problems.push(`${at} must be an object`);
     return null;
@@ -65,15 +91,15 @@ function parseQuestion(raw: unknown, at: string, personas: unknown, problems: st
   const before = problems.length;
 
   if (!isNonEmptyString(raw.id)) problems.push(`${at}.id must be a non-empty string`);
-  if (!isNonEmptyString(raw.title)) problems.push(`${where}: title must be a non-empty string`);
+  const title = parseLocalized(raw.title, `${at}.title`, problems);
   if (raw.type !== 'single' && raw.type !== 'multi') problems.push(`${where}: type must be "single" or "multi"`);
 
-  const options: QuestionOption[] = [];
+  const options: LocalizedQuestionOption[] = [];
   if (!Array.isArray(raw.options) || raw.options.length === 0) {
     problems.push(`${where}: options must be a non-empty array`);
   } else {
     raw.options.forEach((o: unknown, j) => {
-      const option = parseOption(o, `${where} options[${j}]`, personas, problems);
+      const option = parseOption(o, { path: `${at}.options[${j}]`, question: where, index: j }, personas, problems);
       if (option) options.push(option);
     });
     for (const id of duplicates(options.map((o) => o.id))) {
@@ -90,21 +116,32 @@ function parseQuestion(raw: unknown, at: string, personas: unknown, problems: st
   }
 
   if (problems.length > before) return null;
-  const question: Question = { id: raw.id as string, title: raw.title as string, type: raw.type as Question['type'], options };
+  const question: LocalizedQuestion = { id: raw.id as string, title: title!, type: raw.type as LocalizedQuestion['type'], options };
   if (raw.type === 'multi') question.max = raw.max as number;
   return question;
 }
 
-function parseOption(raw: unknown, at: string, personas: unknown, problems: string[]): QuestionOption | null {
+/**
+ * `at.path` is the option's path (`questions[1].options[2]`, used for its localized label),
+ * `at.question` how its question is named in the other messages.
+ */
+function parseOption(
+  raw: unknown,
+  at: { path: string; question: string; index: number },
+  personas: unknown,
+  problems: string[],
+): LocalizedQuestionOption | null {
+  const { question } = at;
+  const indexed = `${question} options[${at.index}]`;
   if (!isObject(raw)) {
-    problems.push(`${at} must be an object`);
+    problems.push(`${indexed} must be an object`);
     return null;
   }
-  const where = isNonEmptyString(raw.id) ? `${at.replace(/ options\[\d+\]$/, '')} option "${raw.id}"` : at;
+  const where = isNonEmptyString(raw.id) ? `${question} option "${raw.id}"` : indexed;
   const before = problems.length;
 
-  if (!isNonEmptyString(raw.id)) problems.push(`${at}.id must be a non-empty string`);
-  if (!isNonEmptyString(raw.label)) problems.push(`${where}: label must be a non-empty string`);
+  if (!isNonEmptyString(raw.id)) problems.push(`${indexed}.id must be a non-empty string`);
+  const label = parseLocalized(raw.label, `${at.path}.label`, problems);
   if (!isNonEmptyString(raw.icon)) problems.push(`${where}: icon must be a non-empty string`);
   if (raw.tags !== undefined) {
     if (!Array.isArray(raw.tags) || !raw.tags.every((t) => typeof t === 'string')) {
@@ -120,13 +157,13 @@ function parseOption(raw: unknown, at: string, personas: unknown, problems: stri
   }
 
   if (problems.length > before) return null;
-  const option: QuestionOption = { id: raw.id as string, label: raw.label as string, icon: raw.icon as string };
+  const option: LocalizedQuestionOption = { id: raw.id as string, label: label!, icon: raw.icon as string };
   if (raw.tags !== undefined) option.tags = [...(raw.tags as string[])];
   return option;
 }
 
 /** Reads, parses and validates the question set file; errors name the file and every problem. */
-export function loadQuestionSet(path: string = DEFAULT_QUESTIONS_PATH): QuestionSet {
+export function loadQuestionSet(path: string = DEFAULT_QUESTIONS_PATH): LocalizedQuestionSet {
   try {
     return parseQuestionSet(JSON.parse(readFileSync(path, 'utf8')));
   } catch (error) {

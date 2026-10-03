@@ -9,35 +9,7 @@ import type { AppTripDto, TripRole } from './app-trips.types.js';
 import { QUESTION_SET } from '../wizard/wizard.types.js';
 import { appDb } from '../testing/app-db.js';
 import { accessTokens, appTestingModule, seedUser } from '../testing/app-testing.js';
-import type { QuestionSet } from '../wizard/wizard.types.js';
-
-// A small question set, so these tests don't depend on the bundled questions.json.
-const QUESTIONS: QuestionSet = {
-  version: 1,
-  questions: [
-    {
-      id: 'pace',
-      title: 'Pace?',
-      type: 'single',
-      options: [
-        { id: 'slow', label: 'Slow', icon: 's', tags: ['relaxer'] },
-        { id: 'packed', label: 'Packed', icon: 'p', tags: ['adventurer'] },
-      ],
-    },
-    {
-      id: 'interests',
-      title: 'Interests?',
-      type: 'multi',
-      max: 2,
-      options: [
-        { id: 'food', label: 'Food', icon: 'f', tags: ['foodie'] },
-        { id: 'beach', label: 'Beach', icon: 'b', tags: ['relaxer'] },
-        { id: 'hiking', label: 'Hiking', icon: 'h', tags: ['adventurer'] },
-      ],
-    },
-  ],
-  personas: { relaxer: 'Easygoing Wanderer', foodie: 'Taste Hunter', adventurer: 'Trail Seeker' },
-};
+import { TEST_QUESTIONS as QUESTIONS } from '../testing/wizard-questions.js';
 
 /**
  * In-memory stand-in for the two repositories, covering exactly the calls `AppTripsService`
@@ -185,12 +157,14 @@ describe('App trips API (feature)', () => {
     db.members = [];
   });
 
-  const call = (method: string, path: string, user: string | null, body?: unknown) =>
+  /** Calls the API as `user`; `language` is sent as `Accept-Language` (none by default). */
+  const call = (method: string, path: string, user: string | null, body?: unknown, language?: string) =>
     fetch(`${baseUrl}${path}`, {
       method,
       headers: {
         ...(user ? { authorization: `Bearer ${tokens[user]}` } : {}),
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+        ...(language ? { 'accept-language': language } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -254,7 +228,12 @@ describe('App trips API (feature)', () => {
         createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
         updatedAt: expect.stringMatching(/Z$/),
       });
-      expect(db.trips.get(trip.id)).toMatchObject({ ownerUserId: OWNER, provider: null, chatId: null });
+      expect(db.trips.get(trip.id)).toMatchObject({
+        ownerUserId: OWNER,
+        provider: null,
+        chatId: null,
+        travelerProfile: { questionSetVersion: 1, answers: { pace: ['slow'] }, persona: 'relaxer' },
+      });
       expect(db.members).toEqual([expect.objectContaining({ tripId: trip.id, userId: OWNER, role: 'owner' })]);
     });
 
@@ -321,6 +300,63 @@ describe('App trips API (feature)', () => {
         answers: { interests: ['hiking', 'food'], pace: ['packed'] },
         persona: 'Trail Seeker',
       });
+    });
+  });
+
+  describe('persona language', () => {
+    const profile = (persona: string | null) => ({ questionSetVersion: 1, answers: { pace: ['slow'] }, persona });
+    const personaOf = async (res: Response) => ((await res.json()) as AppTripDto).travelerProfile?.persona;
+
+    it('creates with the persona key stored and returns its label in the request language', async () => {
+      const res = await call(
+        'POST',
+        '/trips',
+        OWNER,
+        { ...valid, travelerProfile: { questionSetVersion: 1, answers: { pace: ['packed'] } } },
+        'es-MX,es;q=0.9',
+      );
+
+      expect(res.status).toBe(201);
+      const trip = (await res.json()) as AppTripDto;
+      expect(trip.travelerProfile).toEqual({ questionSetVersion: 1, answers: { pace: ['packed'] }, persona: 'Buscador de senderos' });
+      expect(db.trips.get(trip.id)?.travelerProfile?.persona).toBe('adventurer');
+    });
+
+    it.each([
+      [undefined, 'Easygoing Wanderer'],
+      ['en-US', 'Easygoing Wanderer'],
+      ['pt-BR', 'Viajante tranquilo'],
+      ['pt-PT', 'Viajante tranquilo'],
+      ['es', 'Viajero relajado'],
+      ['fr-FR', 'Easygoing Wanderer'],
+      ['fr;q=1, es;q=0.5', 'Viajero relajado'],
+    ])('follows Accept-Language %p on every Trip response', async (language, label) => {
+      const id = db.seed(OWNER, [[EDITOR, 'editor']], { travelerProfile: profile('relaxer') });
+
+      expect(await personaOf(await call('GET', `/trips/${id}`, OWNER, undefined, language))).toBe(label);
+      const list = (await (await call('GET', '/trips', OWNER, undefined, language)).json()) as { trips: AppTripDto[] };
+      expect(list.trips[0].travelerProfile?.persona).toBe(label);
+      expect(await personaOf(await call('PATCH', `/trips/${id}`, EDITOR, { notes: 'x' }, language))).toBe(label);
+    });
+
+    it('maps a row holding the old English label back to its key, in the request language', async () => {
+      const id = db.seed(OWNER, [], { travelerProfile: profile('Taste Hunter') });
+
+      expect(await personaOf(await call('GET', `/trips/${id}`, OWNER, undefined, 'pt-BR'))).toBe('Caçador de sabores');
+      expect(await personaOf(await call('GET', `/trips/${id}`, OWNER, undefined, 'en'))).toBe('Taste Hunter');
+      expect(db.trips.get(id)?.travelerProfile?.persona).toBe('Taste Hunter'); // reads don't write
+
+      // Any save rewrites it to the key.
+      expect(await personaOf(await call('PATCH', `/trips/${id}`, OWNER, { notes: 'x' }, 'es'))).toBe('Cazador de sabores');
+      expect(db.trips.get(id)?.travelerProfile?.persona).toBe('foodie');
+    });
+
+    it('returns an unknown stored persona as null and leaves it stored', async () => {
+      const id = db.seed(OWNER, [], { travelerProfile: profile('Retired Persona') });
+
+      expect(await personaOf(await call('GET', `/trips/${id}`, OWNER, undefined, 'es'))).toBeNull();
+      expect(await personaOf(await call('PATCH', `/trips/${id}`, OWNER, { notes: 'x' }))).toBeNull();
+      expect(db.trips.get(id)?.travelerProfile?.persona).toBe('Retired Persona');
     });
   });
 
