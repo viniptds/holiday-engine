@@ -7,6 +7,36 @@ import { Trip } from '../trips/trip.entity.js';
 import { TripMember } from './trip-member.entity.js';
 import { AppTripsModule } from './app-trips.module.js';
 import type { AppTripDto, TripRole } from './app-trips.types.js';
+import { QUESTION_SET } from '../wizard/wizard.types.js';
+import type { QuestionSet } from '../wizard/wizard.types.js';
+
+// A small question set, so these tests don't depend on the bundled questions.json.
+const QUESTIONS: QuestionSet = {
+  version: 1,
+  questions: [
+    {
+      id: 'pace',
+      title: 'Pace?',
+      type: 'single',
+      options: [
+        { id: 'slow', label: 'Slow', icon: 's', tags: ['relaxer'] },
+        { id: 'packed', label: 'Packed', icon: 'p', tags: ['adventurer'] },
+      ],
+    },
+    {
+      id: 'interests',
+      title: 'Interests?',
+      type: 'multi',
+      max: 2,
+      options: [
+        { id: 'food', label: 'Food', icon: 'f', tags: ['foodie'] },
+        { id: 'beach', label: 'Beach', icon: 'b', tags: ['relaxer'] },
+        { id: 'hiking', label: 'Hiking', icon: 'h', tags: ['adventurer'] },
+      ],
+    },
+  ],
+  personas: { relaxer: 'Easygoing Wanderer', foodie: 'Taste Hunter', adventurer: 'Trail Seeker' },
+};
 
 /**
  * In-memory stand-in for the two repositories, covering exactly the calls `AppTripsService`
@@ -132,6 +162,8 @@ describe('App trips API (feature)', () => {
       .useValue(db.tripsRepo)
       .overrideProvider(getRepositoryToken(TripMember))
       .useValue(db.membersRepo)
+      .overrideProvider(QUESTION_SET)
+      .useValue(QUESTIONS)
       .compile();
     app = moduleRef.createNestApplication({ logger: false });
     await app.listen(0, '127.0.0.1');
@@ -202,7 +234,7 @@ describe('App trips API (feature)', () => {
         story: 'Our honeymoon',
         partyType: 'couple',
         partySize: 2,
-        travelerProfile: { questionSetVersion: 1, answers: { pace: ['slow'] }, persona: null },
+        travelerProfile: { questionSetVersion: 1, answers: { pace: ['slow'] }, persona: 'Easygoing Wanderer' },
         myRole: 'owner',
         members: [{ userId: OWNER, displayName: 'Traveler 1111', avatarUrl: null, role: 'owner' }],
         memberCount: 1,
@@ -240,6 +272,42 @@ describe('App trips API (feature)', () => {
       expect(Object.keys(body.fields).sort()).toEqual(['destination', 'endDate', 'extra', 'partySize', 'partyType']);
       expect(body.fields.endDate).toBe('endDate must be at most 365 days after startDate');
       expect(db.trips.size).toBe(0);
+    });
+  });
+
+  describe('travelerProfile', () => {
+    it('rejects answers outside the question set with 400 and per-answer fields', async () => {
+      const res = await call('POST', '/trips', OWNER, {
+        ...valid,
+        travelerProfile: { questionSetVersion: 1, answers: { pace: ['slow', 'packed'], mood: ['happy'], interests: ['golf'] } },
+      });
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        code: 'VALIDATION',
+        message: 'Some fields are invalid',
+        fields: {
+          'travelerProfile.answers.pace': 'pace takes exactly 1 option',
+          'travelerProfile.answers.mood': 'mood is not a known question',
+          'travelerProfile.answers.interests': 'golf is not an option of interests',
+        },
+      });
+      expect(db.trips.size).toBe(0);
+    });
+
+    it('recomputes the persona when PATCH changes the profile', async () => {
+      const id = sharedTrip();
+
+      const res = await call('PATCH', `/trips/${id}`, EDITOR, {
+        travelerProfile: { questionSetVersion: 1, answers: { interests: ['hiking', 'food'], pace: ['packed'] } },
+      });
+
+      expect(res.status).toBe(200);
+      expect((await res.json()).travelerProfile).toEqual({
+        questionSetVersion: 1,
+        answers: { interests: ['hiking', 'food'], pace: ['packed'] },
+        persona: 'Trail Seeker',
+      });
     });
   });
 

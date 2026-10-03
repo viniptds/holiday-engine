@@ -16,7 +16,7 @@ export type TravelerProfile = {
   questionSetVersion: number;
   /** questionId -> option ids. */
   answers: Record<string, string[]>;
-  /** Computed by the engine (B2); always null until then. */
+  /** The `personas` label computed by `WizardService` from the answers' tags, or null. */
   persona: string | null;
 };
 

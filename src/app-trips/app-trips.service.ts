@@ -9,16 +9,13 @@ import { Trip } from '../trips/trip.entity.js';
 import { daysBetween, MAX_TRIP_DAYS } from '../trips/dto/date-rules.js';
 import { TripMember } from './trip-member.entity.js';
 import { AppTripDto, TravelerProfile, TripRole } from './app-trips.types.js';
+import { WizardService } from '../wizard/wizard.service.js';
 import { CreateAppTripDto } from './dto/create-app-trip.dto.js';
 import { UpdateAppTripDto } from './dto/update-app-trip.dto.js';
 import { TravelerProfileInputDto } from './dto/traveler-profile.dto.js';
 import { previewMembers, toAppTripDto, toMemberSummary } from './app-trip.mapper.js';
 
 const tripNotFound = () => new AppError('NOT_FOUND', 'Trip not found');
-
-// Persona is computed against the question set in B2; stored as null until then.
-const toTravelerProfile = (input: TravelerProfileInputDto | null | undefined): TravelerProfile | null =>
-  input ? { questionSetVersion: input.questionSetVersion, answers: input.answers, persona: null } : null;
 
 /**
  * App trips. Every method is scoped by membership: a trip the user isn't a member of
@@ -30,6 +27,7 @@ export class AppTripsService {
     @InjectRepository(Trip) private readonly trips: Repository<Trip>,
     @InjectRepository(TripMember) private readonly members: Repository<TripMember>,
     @Inject(USER_DIRECTORY) private readonly users: UserDirectory,
+    private readonly wizard: WizardService,
   ) {}
 
   /** Trips the user is a member of, by startDate ascending. */
@@ -44,6 +42,7 @@ export class AppTripsService {
 
   /** Creates the trip and the caller's owner membership in one transaction. */
   async create(user: AuthUser, data: CreateAppTripDto): Promise<AppTripDto> {
+    const travelerProfile = this.toTravelerProfile(data.travelerProfile);
     const membership = await this.trips.manager.transaction(async (manager) => {
       const trip = await manager.save(
         manager.create(Trip, {
@@ -57,7 +56,7 @@ export class AppTripsService {
           story: data.story ?? null,
           partyType: data.partyType ?? null,
           partySize: data.partySize ?? null,
-          travelerProfile: toTravelerProfile(data.travelerProfile),
+          travelerProfile,
         }),
       );
       const member = await manager.save(manager.create(TripMember, { tripId: trip.id, userId: user.id, role: 'owner' }));
@@ -84,7 +83,7 @@ export class AppTripsService {
     if (data.story !== undefined) trip.story = data.story;
     if (data.partyType !== undefined) trip.partyType = data.partyType;
     if (data.partySize !== undefined) trip.partySize = data.partySize;
-    if (data.travelerProfile !== undefined) trip.travelerProfile = toTravelerProfile(data.travelerProfile);
+    if (data.travelerProfile !== undefined) trip.travelerProfile = this.toTravelerProfile(data.travelerProfile);
 
     // The DTO checks the dates when both are sent; this covers one date against the stored other.
     const dateField = data.endDate !== undefined ? 'endDate' : 'startDate';
@@ -108,6 +107,11 @@ export class AppTripsService {
   async delete(user: AuthUser, tripId: string): Promise<void> {
     const membership = await this.membership(user, tripId, ['owner']);
     await this.trips.delete({ id: membership.tripId });
+  }
+
+  /** Validates a client profile against the question set and computes its persona (VALIDATION if invalid). */
+  private toTravelerProfile(input: TravelerProfileInputDto | null | undefined): TravelerProfile | null {
+    return input ? this.wizard.buildProfile(input) : null;
   }
 
   /**

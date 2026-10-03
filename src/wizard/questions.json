@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "questions": [
+    {
+      "id": "pace",
+      "title": "What's your travel pace?",
+      "type": "single",
+      "options": [
+        { "id": "slow", "label": "Slow and easy", "icon": "coffee", "tags": ["relaxer"] },
+        { "id": "balanced", "label": "A bit of both", "icon": "scale" },
+        { "id": "packed", "label": "See it all", "icon": "zap", "tags": ["explorer"] }
+      ]
+    },
+    {
+      "id": "interests",
+      "title": "What makes a great day?",
+      "type": "multi",
+      "max": 3,
+      "options": [
+        { "id": "food", "label": "Food", "icon": "utensils", "tags": ["foodie"] },
+        { "id": "culture", "label": "Culture", "icon": "landmark", "tags": ["explorer"] },
+        { "id": "nature", "label": "Nature", "icon": "mountain", "tags": ["adventurer"] },
+        { "id": "beach", "label": "Beach", "icon": "sun", "tags": ["relaxer"] },
+        { "id": "nightlife", "label": "Nightlife", "icon": "music" }
+      ]
+    },
+    {
+      "id": "budget",
+      "title": "How do you like to spend?",
+      "type": "single",
+      "options": [
+        { "id": "saver", "label": "Smart saver", "icon": "piggy-bank" },
+        { "id": "comfort", "label": "Comfort first", "icon": "sofa", "tags": ["relaxer"] },
+        { "id": "treat", "label": "Treat yourself", "icon": "gem" }
+      ]
+    }
+  ],
+  "personas": {
+    "relaxer": "Easygoing Wanderer",
+    "explorer": "Curious Explorer",
+    "foodie": "Taste Hunter",
+    "adventurer": "Trail Seeker"
+  }
+}

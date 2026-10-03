@@ -7,9 +7,10 @@ import { AppTripsController } from './app-trips.controller.js';
 import { AppTripsService } from './app-trips.service.js';
 import { DevAuthGuard } from './dev-auth.guard.js';
 import { StubUserDirectory } from './stub-user-directory.js';
+import { WizardModule } from '../wizard/wizard.module.js';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Trip, TripMember])],
+  imports: [TypeOrmModule.forFeature([Trip, TripMember]), WizardModule],
   controllers: [AppTripsController],
   providers: [
     AppTripsService,

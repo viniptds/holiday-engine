@@ -8,6 +8,37 @@ import { TripMember } from './trip-member.entity.js';
 import { AppTripsService } from './app-trips.service.js';
 import { StubUserDirectory } from './stub-user-directory.js';
 import type { TripRole } from './app-trips.types.js';
+import { WizardService } from '../wizard/wizard.service.js';
+import { QUESTION_SET } from '../wizard/wizard.types.js';
+import type { QuestionSet } from '../wizard/wizard.types.js';
+
+// A small question set, so these tests don't depend on the bundled questions.json.
+const QUESTIONS: QuestionSet = {
+  version: 1,
+  questions: [
+    {
+      id: 'pace',
+      title: 'Pace?',
+      type: 'single',
+      options: [
+        { id: 'slow', label: 'Slow', icon: 's', tags: ['relaxer'] },
+        { id: 'packed', label: 'Packed', icon: 'p', tags: ['adventurer'] },
+      ],
+    },
+    {
+      id: 'interests',
+      title: 'Interests?',
+      type: 'multi',
+      max: 2,
+      options: [
+        { id: 'food', label: 'Food', icon: 'f', tags: ['foodie'] },
+        { id: 'beach', label: 'Beach', icon: 'b', tags: ['relaxer'] },
+        { id: 'hiking', label: 'Hiking', icon: 'h', tags: ['adventurer'] },
+      ],
+    },
+  ],
+  personas: { relaxer: 'Easygoing Wanderer', foodie: 'Taste Hunter', adventurer: 'Trail Seeker' },
+};
 
 const TRIP_ID = '0b4f8c1e-3c2a-4f7e-9d1a-2b3c4d5e6f70';
 const ME = { id: '7d0c5a8e-1f2b-4c3d-8e9f-0a1b2c3d4e5f', email: 'me@example.com' };
@@ -76,6 +107,8 @@ describe('AppTripsService', () => {
         { provide: getRepositoryToken(Trip), useValue: trips },
         { provide: getRepositoryToken(TripMember), useValue: members },
         { provide: USER_DIRECTORY, useClass: StubUserDirectory },
+        WizardService,
+        { provide: QUESTION_SET, useValue: QUESTIONS },
       ],
     }).compile();
     service = moduleRef.get(AppTripsService);
@@ -122,7 +155,7 @@ describe('AppTripsService', () => {
       });
     });
 
-    it('stores the optional fields, with a null persona on the traveler profile', async () => {
+    it('stores the optional fields, with the computed persona on the traveler profile', async () => {
       members.find.mockResolvedValueOnce([makeMember(ME.id, 'owner')]);
       const answers = { pace: ['slow'], interests: ['food'] };
 
@@ -140,9 +173,23 @@ describe('AppTripsService', () => {
         story: 's',
         partyType: 'family',
         partySize: 4,
-        travelerProfile: { questionSetVersion: 1, answers, persona: null },
+        // relaxer and foodie tie at 1; relaxer is listed first in personas.
+        travelerProfile: { questionSetVersion: 1, answers, persona: 'Easygoing Wanderer' },
       });
-      expect(dto.travelerProfile).toEqual({ questionSetVersion: 1, answers, persona: null });
+      expect(dto.travelerProfile).toEqual({ questionSetVersion: 1, answers, persona: 'Easygoing Wanderer' });
+    });
+
+    it('rejects a profile that does not match the question set, before any write', async () => {
+      await expect(
+        service.create(ME, { ...data, travelerProfile: { questionSetVersion: 2, answers: { pace: ['fast'] } } }),
+      ).rejects.toMatchObject({
+        code: 'VALIDATION',
+        fields: {
+          'travelerProfile.questionSetVersion': expect.any(String),
+          'travelerProfile.answers.pace': expect.any(String),
+        },
+      });
+      expect(transaction).not.toHaveBeenCalled();
     });
 
     it('returns the trip with the caller as its only member and owner', async () => {
@@ -325,12 +372,36 @@ describe('AppTripsService', () => {
       expect(dto).toMatchObject({ destination: 'Lisbon', notes: 'old notes', story: 'old story', partyType: 'couple', partySize: 3 });
     });
 
-    it('replaces the traveler profile, resetting the persona', async () => {
-      given(membershipOf('owner', makeTrip({ travelerProfile: { questionSetVersion: 1, answers: {}, persona: 'Foodie' } })));
+    it('replaces the traveler profile, recomputing the persona', async () => {
+      given(membershipOf('owner', makeTrip({ travelerProfile: { questionSetVersion: 1, answers: {}, persona: 'Taste Hunter' } })));
 
-      const dto = await service.update(ME, TRIP_ID, { travelerProfile: { questionSetVersion: 1, answers: { pace: ['fast'] } } });
+      const dto = await service.update(ME, TRIP_ID, { travelerProfile: { questionSetVersion: 1, answers: { pace: ['packed'] } } });
 
-      expect(dto.travelerProfile).toEqual({ questionSetVersion: 1, answers: { pace: ['fast'] }, persona: null });
+      expect(dto.travelerProfile).toEqual({ questionSetVersion: 1, answers: { pace: ['packed'] }, persona: 'Trail Seeker' });
+    });
+
+    it('keeps the stored persona when travelerProfile is omitted', async () => {
+      const travelerProfile = { questionSetVersion: 1, answers: { pace: ['slow'] }, persona: 'Easygoing Wanderer' };
+      given(membershipOf('owner', makeTrip({ travelerProfile })));
+
+      await expect(service.update(ME, TRIP_ID, { notes: 'x' })).resolves.toMatchObject({ travelerProfile });
+    });
+
+    it('rejects an invalid profile without saving', async () => {
+      given(membershipOf('editor'));
+
+      await expect(
+        service.update(ME, TRIP_ID, { travelerProfile: { questionSetVersion: 1, answers: { interests: ['food', 'food'] } } }),
+      ).rejects.toMatchObject({ code: 'VALIDATION', fields: { 'travelerProfile.answers.interests': expect.any(String) } });
+      expect(trips.save).not.toHaveBeenCalled();
+    });
+
+    it('checks the role before the profile (a viewer gets FORBIDDEN, not VALIDATION)', async () => {
+      given(membershipOf('viewer'));
+
+      await expect(
+        service.update(ME, TRIP_ID, { travelerProfile: { questionSetVersion: 9, answers: {} } }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
 
     it('rejects an endDate before the stored startDate', async () => {

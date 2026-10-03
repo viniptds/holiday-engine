@@ -23,7 +23,7 @@ function IsAnswerMap(options?: ValidationOptions) {
 
 /**
  * `travelerProfile` as clients send it (no persona: the engine computes it).
- * Only the shape is checked here; B2 validates it against the question set.
+ * Only the shape is checked here; `WizardService.buildProfile` checks it against the question set.
  */
 export class TravelerProfileInputDto {
   @Min(1)
