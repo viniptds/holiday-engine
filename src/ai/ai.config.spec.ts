@@ -13,7 +13,15 @@ describe('readAiConfig', () => {
       fallbacks: 'default',
       placesProvider: 'mock',
       placesApiKey: '',
+      anthropicWorkspaceId: null,
     });
+  });
+
+  it('reads ANTHROPIC_WORKSPACE_ID (trimmed; unset or empty → null)', () => {
+    const base = { AI_PROVIDER: 'anthropic', ANTHROPIC_API_KEY: 'k' };
+    expect(readAiConfig({ ...base, ANTHROPIC_WORKSPACE_ID: ' wrkspc_1 ' }).anthropicWorkspaceId).toBe('wrkspc_1');
+    expect(readAiConfig(base).anthropicWorkspaceId).toBeNull();
+    expect(readAiConfig({ ...base, ANTHROPIC_WORKSPACE_ID: '  ' }).anthropicWorkspaceId).toBeNull();
   });
 
   it('uses claude-sonnet-5-5 by default for anthropic, and AI_MODEL when set', () => {

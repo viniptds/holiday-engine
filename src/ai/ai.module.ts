@@ -34,6 +34,7 @@ export function createLlmProvider(config: AiConfig): LlmProvider {
         effort: config.effort,
         fallbacks: config.fallbacks,
         timeoutMs: config.timeoutMs,
+        workspaceId: config.anthropicWorkspaceId,
       });
     case 'openai':
       return new OpenAiProvider({

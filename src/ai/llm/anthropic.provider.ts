@@ -19,6 +19,8 @@ export type AnthropicOptions = {
   /** `off` → neither the `fallbacks` field nor its beta header. Default `default`. */
   fallbacks?: AiFallbacks;
   timeoutMs: number;
+  /** Sent as `anthropic-workspace-id` when set: required for API keys not scoped to a workspace. Never logged. */
+  workspaceId?: string | null;
   maxRetries?: number;
   fetch?: FetchFn;
   sleep?: SleepFn;
@@ -70,6 +72,7 @@ export class AnthropicProvider implements LlmProvider {
     return {
       'x-api-key': this.options.apiKey,
       'anthropic-version': ANTHROPIC_VERSION,
+      ...(this.options.workspaceId ? { 'anthropic-workspace-id': this.options.workspaceId } : {}),
       ...(this.fallbacksOn ? { 'anthropic-beta': ANTHROPIC_FALLBACK_BETA } : {}),
     };
   }
