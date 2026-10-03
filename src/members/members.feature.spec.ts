@@ -13,8 +13,10 @@ import { RefreshTokenService } from '../auth/refresh-token.service.js';
 import { TripInvite } from './trip-invite.entity.js';
 import { MembersModule } from './members.module.js';
 import { MembersService } from './members.service.js';
-import { hashToken } from './invites.service.js';
-import { LoggingInviteMailer } from './invite-mailer.js';
+import { EMAIL_INVITE_LIMITS, InvitesService, hashToken } from './invites.service.js';
+import { MailInviteMailer } from './invite-mailer.js';
+import { MAIL_TRANSPORT } from '../mail/mail.types.js';
+import type { MailMessage, MailTransport } from '../mail/mail.types.js';
 import type { InviteDto, MemberDto } from './members.types.js';
 
 const OWNER = '11111111-1f2b-4c3d-8e9f-0a1b2c3d4e5f';
@@ -45,7 +47,9 @@ describe('Members and invites API (feature)', () => {
   let members: MembersService;
   let refreshTokens: RefreshTokenService;
   let tokens: Record<string, string>;
-  const sendInvite = jest.spyOn(LoggingInviteMailer.prototype, 'sendInvite');
+  let transport: MailTransport;
+  let invitesService: InvitesService;
+  const sendInvite = jest.spyOn(MailInviteMailer.prototype, 'sendInvite');
 
   beforeAll(async () => {
     const moduleRef = await appTestingModule(db, [MembersModule], { APP_INVITE_BASE_URL: 'https://holid.example/' }).compile();
@@ -55,6 +59,8 @@ describe('Members and invites API (feature)', () => {
     await app.listen(0, '127.0.0.1');
     baseUrl = `${await app.getUrl()}/app/v1`;
     members = moduleRef.get(MembersService);
+    transport = moduleRef.get(MAIL_TRANSPORT);
+    invitesService = moduleRef.get(InvitesService);
   });
 
   afterAll(async () => {
@@ -71,15 +77,24 @@ describe('Members and invites API (feature)', () => {
   });
 
   /** Calls the API signed in as `user` (a real access token), or anonymously with null. */
-  const call = (method: string, path: string, user: string | null, body?: unknown) =>
+  /** Raw request: returns as soon as the response arrives (background invite emails may still be running). */
+  const send = (method: string, path: string, user: string | null, body?: unknown, headers: Record<string, string> = {}) =>
     fetch(`${baseUrl}${path}`, {
       method,
       headers: {
+        ...headers,
         ...(user ? { authorization: `Bearer ${tokens[user]}` } : {}),
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+
+  /** Like `send`, then waits for background invite emails, so tests can assert on them. */
+  const call = async (method: string, path: string, user: string | null, body?: unknown, headers: Record<string, string> = {}) => {
+    const res = await send(method, path, user, body, headers);
+    await invitesService.whenEmailsSettled();
+    return res;
+  };
 
   /** A trip owned by `owner`; other members join one minute apart, in order. */
   function seedTrip(owner = OWNER, others: [string, TripRole][] = [[EDITOR, 'editor'], [VIEWER, 'viewer']]): string {
@@ -417,38 +432,156 @@ describe('Members and invites API (feature)', () => {
           role: 'viewer',
           destination: 'Lisbon',
           invitedBy: 'Traveler 1111',
+          startDate: '2026-11-01',
+          endDate: '2026-11-05',
           url: invite.url,
           deepLink: invite.deepLink,
+          locale: 'en',
         }),
       );
     });
 
-    it('never logs the plain token at info level (or above)', async () => {
+    it("writes the email in the inviter's language (Accept-Language)", async () => {
       const id = seedTrip();
-      const spies = (['log', 'warn', 'error', 'debug'] as const).map((level) =>
-        jest.spyOn(Logger.prototype, level).mockImplementation(() => undefined),
-      );
+      const providerSend = jest.spyOn(transport, 'send');
 
-      const invite = (await (await call('POST', `/trips/${id}/invites`, OWNER, { email: 'ana@example.com' })).json()) as InviteDto;
+      const res = await call('POST', `/trips/${id}/invites`, OWNER, { email: 'ana@example.com' }, { 'accept-language': 'es-MX,es;q=0.9,en;q=0.5' });
 
-      const token = invite.url.split('/').pop()!;
-      const [log, warn, error, debug] = spies.map((spy) => JSON.stringify(spy.mock.calls));
-      expect(log).toContain(invite.id);
-      expect(log + warn + error).not.toContain(token);
-      expect(debug).toContain(token);
-      spies.forEach((spy) => spy.mockRestore());
+      expect(res.status).toBe(201);
+      const invite = (await res.json()) as InviteDto;
+      expect(sendInvite).toHaveBeenCalledWith(expect.objectContaining({ locale: 'es' }));
+      const [message] = providerSend.mock.calls[0] as [MailMessage];
+      expect(message).toMatchObject({
+        to: 'ana@example.com',
+        subject: 'Tienes una invitación para planear un viaje en Holid.ai',
+        tags: ['trip-invite'],
+      });
+      expect(message.text).toContain('Traveler 1111 está planeando un viaje a Lisbon');
+      expect(message.text).toContain('Abrir invitación');
+      expect(message.html).toContain('lang="es"');
+      expect(message.html).toContain(`href="${invite.url}"`);
+      providerSend.mockRestore();
     });
 
-    it('still returns the invite when sending the email fails', async () => {
+    it('falls back to English for an unsupported language', async () => {
       const id = seedTrip();
-      sendInvite.mockRejectedValueOnce(new Error('smtp down'));
-      const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+      await call('POST', `/trips/${id}/invites`, OWNER, { email: 'ana@example.com' }, { 'accept-language': 'fr-FR' });
+
+      expect(sendInvite).toHaveBeenCalledWith(expect.objectContaining({ locale: 'en' }));
+    });
+
+    describe("keeps the token and the invitee's email out of the logs, at every level", () => {
+      const LEVELS = ['log', 'warn', 'error', 'debug', 'verbose', 'fatal'] as const;
+
+      /** Runs `send` with every Logger level captured; returns all logged text. */
+      async function captureLogs(send: () => Promise<Response>): Promise<{ res: Response; logs: string }> {
+        const spies = LEVELS.map((level) => jest.spyOn(Logger.prototype, level).mockImplementation(() => undefined));
+        try {
+          const res = await send();
+          return { res, logs: JSON.stringify(spies.map((spy) => spy.mock.calls)) };
+        } finally {
+          spies.forEach((spy) => spy.mockRestore());
+        }
+      }
+
+      it('when the email is sent', async () => {
+        const id = seedTrip();
+
+        const { res, logs } = await captureLogs(() =>
+          call('POST', `/trips/${id}/invites`, OWNER, { email: 'invitee@example.com' }, { 'accept-language': 'pt-BR' }),
+        );
+
+        const invite = (await res.json()) as InviteDto;
+        const token = invite.url.split('/').pop()!;
+        expect(res.status).toBe(201);
+        expect(sendInvite).toHaveBeenCalledTimes(1);
+        // The ids are what identify the invite in the logs.
+        expect(logs).toContain(invite.id);
+        expect(logs).toContain(id);
+        expect(logs).not.toContain(token);
+        expect(logs).not.toContain('invitee@example.com');
+        expect(logs).not.toContain('holidai://');
+      });
+
+      it('when the provider fails with an error that echoes them', async () => {
+        const id = seedTrip();
+        let leaked = '';
+        const providerSend = jest.spyOn(transport, 'send').mockImplementationOnce(async (message: MailMessage) => {
+          leaked = message.text;
+          throw new Error(`550 <${message.to}> rejected; body was: ${message.text}`);
+        });
+
+        const { res, logs } = await captureLogs(() => call('POST', `/trips/${id}/invites`, OWNER, { email: 'invitee@example.com' }));
+
+        const invite = (await res.json()) as InviteDto;
+        const token = invite.url.split('/').pop()!;
+        expect(res.status).toBe(201);
+        expect(leaked).toContain(token);
+        expect(logs).toContain(`Sending invite ${invite.id} failed: 550 <[redacted]> rejected`);
+        expect(logs).not.toContain(token);
+        expect(logs).not.toContain('invitee@example.com');
+        expect(logs).not.toContain('holidai://');
+        expect(logs).not.toContain('https://holid.example');
+        providerSend.mockRestore();
+      });
+    });
+
+    it('still returns 201 when the mail provider refuses the email, and logs the invite id and error at warn', async () => {
+      const id = seedTrip();
+      const providerSend = jest.spyOn(transport, 'send').mockRejectedValueOnce(new Error('Mailjet send failed with HTTP 401: bad key'));
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
       const res = await call('POST', `/trips/${id}/invites`, OWNER, { email: 'ana@example.com' });
 
       expect(res.status).toBe(201);
-      expect(error).toHaveBeenCalled();
-      error.mockRestore();
+      const invite = (await res.json()) as InviteDto;
+      expect(db.all(TripInvite)).toHaveLength(1);
+      expect(warn).toHaveBeenCalledWith(`Sending invite ${invite.id} failed: Mailjet send failed with HTTP 401: bad key`);
+      warn.mockRestore();
+      providerSend.mockRestore();
+    });
+
+    it('responds without waiting for the email, which then times out after the overall limit', async () => {
+      const id = seedTrip();
+      let release!: () => void;
+      const providerSend = jest
+        .spyOn(transport, 'send')
+        .mockImplementationOnce(() => new Promise((resolve) => (release = () => resolve({}))));
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+      invitesService.sendTimeoutMs = 100;
+
+      const started = Date.now();
+      const res = await send('POST', `/trips/${id}/invites`, OWNER, { email: 'ana@example.com' });
+
+      expect(res.status).toBe(201);
+      const invite = (await res.json()) as InviteDto;
+      expect(warn).not.toHaveBeenCalled(); // the send is still hanging
+      await invitesService.whenEmailsSettled();
+      expect(Date.now() - started).toBeGreaterThanOrEqual(90);
+      expect(warn).toHaveBeenCalledWith(`Sending invite ${invite.id} failed: timed out after 100 ms`);
+      release();
+      invitesService.sendTimeoutMs = 15_000;
+      warn.mockRestore();
+      providerSend.mockRestore();
+    });
+
+    it('uses a 15 s overall timeout by default', () => {
+      expect(new InvitesService({} as never, {} as never, {} as never, {} as never, { get: () => undefined } as never).sendTimeoutMs).toBe(15_000);
+    });
+
+    it("says \"a Holid.ai traveler\" (localized) when the inviter has no display name, never their email", async () => {
+      const id = seedTrip();
+      db.manager(null).update(User, { id: OWNER }, { displayName: '  ' });
+      const providerSend = jest.spyOn(transport, 'send');
+
+      await call('POST', `/trips/${id}/invites`, OWNER, { email: 'ana@example.com' }, { 'accept-language': 'pt-BR' });
+
+      expect(sendInvite).toHaveBeenCalledWith(expect.objectContaining({ invitedBy: null }));
+      const [message] = providerSend.mock.calls[0] as [MailMessage];
+      expect(message.text).toContain('Alguém do Holid.ai está planejando');
+      expect(message.text + message.html).not.toContain('1111@example.com');
+      providerSend.mockRestore();
     });
 
     it.each([
@@ -475,6 +608,103 @@ describe('Members and invites API (feature)', () => {
 
       expect(res.status).toBe(400);
       expect(Object.keys((await res.json()).fields).sort()).toEqual(['email', 'expiresAt']);
+    });
+  });
+
+  describe('email invite rate limits', () => {
+    const MIN = 60_000;
+    const HOUR = 60 * MIN;
+    /** An email invite row created `ago` ms back (the limits count rows, whatever happened to them). */
+    const pastInvite = (tripId: string, ago: number, fields: Partial<TripInvite> = {}) =>
+      seedInvite(tripId, { email: `someone-${randomUUID()}@example.com`, createdBy: OWNER, createdAt: new Date(Date.now() - ago), ...fields });
+
+    async function expectRateLimited(res: Response, retryAfter: [number, number]) {
+      expect(res.status).toBe(429);
+      expect(await res.json()).toEqual({ code: 'RATE_LIMITED', message: expect.any(String) });
+      const seconds = Number(res.headers.get('retry-after'));
+      expect(seconds).toBeGreaterThanOrEqual(retryAfter[0]);
+      expect(seconds).toBeLessThanOrEqual(retryAfter[1]);
+    }
+
+    it('has the agreed limits', () => {
+      expect(EMAIL_INVITE_LIMITS).toEqual({
+        perInviter: { max: 20, windowMs: 24 * HOUR },
+        perRecipient: { max: 1, windowMs: 10 * MIN },
+      });
+    });
+
+    it('allows 20 email invites per inviter in 24 h, then 429 with Retry-After until the oldest leaves the window', async () => {
+      const id = seedTrip();
+      // 19 earlier ones, the oldest 23 h ago (revoked and accepted ones count too).
+      pastInvite(id, 23 * HOUR, { revokedAt: new Date() });
+      pastInvite(id, 22 * HOUR, { acceptedAt: new Date(), acceptedBy: NEWCOMER });
+      for (let i = 0; i < 17; i += 1) pastInvite(id, HOUR);
+
+      expect((await call('POST', `/trips/${id}/invites`, OWNER, { email: 'twentieth@example.com' })).status).toBe(201);
+      const before = db.all(TripInvite).length;
+      const res = await call('POST', `/trips/${id}/invites`, OWNER, { email: 'one-too-many@example.com' });
+
+      await expectRateLimited(res, [HOUR / 1000 - 5, HOUR / 1000]);
+      expect(db.all(TripInvite)).toHaveLength(before);
+      expect(sendInvite).toHaveBeenCalledTimes(1);
+    });
+
+    it('counts the limit per inviter, across trips, but not invites older than 24 h', async () => {
+      const id = seedTrip();
+      const other = seedTrip(OWNER, []);
+      for (let i = 0; i < 10; i += 1) pastInvite(other, 2 * HOUR);
+      for (let i = 0; i < 10; i += 1) pastInvite(id, 25 * HOUR);
+      for (let i = 0; i < 10; i += 1) pastInvite(id, 2 * HOUR, { createdBy: EDITOR });
+
+      expect((await call('POST', `/trips/${id}/invites`, OWNER, { email: 'a1@example.com' })).status).toBe(201);
+      for (let i = 0; i < 9; i += 1) pastInvite(id, HOUR);
+      await expectRateLimited(await call('POST', `/trips/${id}/invites`, OWNER, { email: 'a2@example.com' }), [
+        22 * 3600 - 5,
+        22 * 3600,
+      ]);
+      // The editor's own count is separate.
+      expect((await call('POST', `/trips/${id}/invites`, EDITOR, { email: 'a3@example.com' })).status).toBe(201);
+    });
+
+    it("doesn't limit link invites", async () => {
+      const id = seedTrip();
+      for (let i = 0; i < 20; i += 1) pastInvite(id, HOUR);
+
+      await expectRateLimited(await call('POST', `/trips/${id}/invites`, OWNER, { email: 'x@example.com' }), [1, 82_800]);
+      for (let i = 0; i < 3; i += 1) expect((await call('POST', `/trips/${id}/invites`, OWNER, {})).status).toBe(201);
+    });
+
+    it('allows one email invite per trip and recipient in 10 minutes, matching the address case-insensitively', async () => {
+      const id = seedTrip();
+      const other = seedTrip(OWNER, []);
+
+      expect((await call('POST', `/trips/${id}/invites`, OWNER, { email: 'bia@example.com' })).status).toBe(201);
+      // Even from another member of the trip.
+      await expectRateLimited(await call('POST', `/trips/${id}/invites`, EDITOR, { email: ' BIA@Example.COM ' }), [595, 600]);
+      // Another trip is fine.
+      expect((await call('POST', `/trips/${other}/invites`, OWNER, { email: 'bia@example.com' })).status).toBe(201);
+      expect(db.all(TripInvite, { tripId: id })).toHaveLength(1);
+    });
+
+    it('allows the same recipient again once 10 minutes have passed', async () => {
+      const id = seedTrip();
+      pastInvite(id, 9 * MIN, { email: 'bia@example.com' });
+
+      await expectRateLimited(await call('POST', `/trips/${id}/invites`, OWNER, { email: 'bia@example.com' }), [55, 60]);
+
+      db.manager(null).update(TripInvite, { email: 'bia@example.com' }, { createdAt: new Date(Date.now() - 11 * MIN) });
+      expect((await call('POST', `/trips/${id}/invites`, OWNER, { email: 'bia@example.com' })).status).toBe(201);
+    });
+
+    it('counts invites whose email failed to send', async () => {
+      const id = seedTrip();
+      const providerSend = jest.spyOn(transport, 'send').mockRejectedValueOnce(new Error('down'));
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+      expect((await call('POST', `/trips/${id}/invites`, OWNER, { email: 'bia@example.com' })).status).toBe(201);
+      expect((await call('POST', `/trips/${id}/invites`, OWNER, { email: 'bia@example.com' })).status).toBe(429);
+      warn.mockRestore();
+      providerSend.mockRestore();
     });
   });
 

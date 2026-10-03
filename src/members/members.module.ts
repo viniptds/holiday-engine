@@ -10,12 +10,13 @@ import { MembersController } from './members.controller.js';
 import { InvitesController } from './invites.controller.js';
 import { MembersService } from './members.service.js';
 import { InvitesService } from './invites.service.js';
-import { INVITE_MAILER, LoggingInviteMailer } from './invite-mailer.js';
+import { INVITE_MAILER, MailInviteMailer } from './invite-mailer.js';
+import { MailModule } from '../mail/mail.module.js';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Trip, TripMember, TripInvite]), AuthModule, AppTripsModule],
+  imports: [TypeOrmModule.forFeature([Trip, TripMember, TripInvite]), AuthModule, AppTripsModule, MailModule],
   controllers: [MembersController, InvitesController],
-  providers: [MembersService, InvitesService, { provide: INVITE_MAILER, useClass: LoggingInviteMailer }],
+  providers: [MembersService, InvitesService, { provide: INVITE_MAILER, useClass: MailInviteMailer }],
   exports: [MembersService],
 })
 export class MembersModule implements OnModuleInit {

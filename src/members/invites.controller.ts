@@ -7,6 +7,8 @@ import { AuthGuard } from '../auth/auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import { AppTripDto } from '../app-trips/app-trips.types.js';
 import { InvitesService } from './invites.service.js';
+import { RequestLocale } from '../app-common/locale.js';
+import type { Locale } from '../app-common/locale.js';
 import { CreateInviteDto } from './dto/create-invite.dto.js';
 import { InviteDto, InvitePreviewDto } from './members.types.js';
 
@@ -22,8 +24,9 @@ export class InvitesController {
     @CurrentUser() user: AuthUser,
     @Param('id') tripId: string,
     @Body(appValidationPipe) body: CreateInviteDto,
+    @RequestLocale() locale: Locale,
   ): Promise<InviteDto> {
-    return this.invites.create(user, tripId, body);
+    return this.invites.create(user, tripId, body, locale);
   }
 
   @Get('invites/:token')

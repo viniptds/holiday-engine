@@ -1,8 +1,9 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, MoreThan, Repository } from 'typeorm';
+import { IsNull, MoreThan, Not, Repository } from 'typeorm';
+import type { FindOptionsWhere } from 'typeorm';
 import { AppError } from '../app-common/app-error.js';
 import { USER_DIRECTORY } from '../app-common/auth-user.js';
 import type { AuthUser, UserDirectory } from '../app-common/auth-user.js';
@@ -12,6 +13,9 @@ import type { AppTripDto } from '../app-trips/app-trips.types.js';
 import { TripInvite } from './trip-invite.entity.js';
 import { INVITE_MAILER } from './invite-mailer.js';
 import type { InviteMailer } from './invite-mailer.js';
+import { redactLinks, redactValues } from '../mail/redact.js';
+import { DEFAULT_LOCALE } from '../app-common/locale.js';
+import type { Locale } from '../app-common/locale.js';
 import { CreateInviteDto } from './dto/create-invite.dto.js';
 import {
   DEFAULT_INVITE_BASE_URL,
@@ -38,6 +42,23 @@ const isUsable = (invite: TripInvite, now: Date) =>
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
+export const INVITE_SEND_TIMEOUT_MS = 15_000;
+
+/** Email invites only; link invites aren't limited. */
+export const EMAIL_INVITE_LIMITS = {
+  perInviter: { max: 20, windowMs: 24 * 60 * 60 * 1000 },
+  perRecipient: { max: 1, windowMs: 10 * 60 * 1000 },
+};
+
+function withTimeout(promise: Promise<void>, ms: number): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out after ${ms} ms`)), ms);
+    timer.unref();
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 const isUniqueViolation = (error: unknown) => (error as { code?: unknown })?.code === '23505';
 
 /**
@@ -46,9 +67,12 @@ const isUniqueViolation = (error: unknown) => (error as { code?: unknown })?.cod
  * behave as NOT_FOUND.
  */
 @Injectable()
-export class InvitesService {
+export class InvitesService implements OnApplicationShutdown {
   private readonly logger = new Logger(InvitesService.name);
   private readonly baseUrl: string;
+  private readonly pendingEmails = new Set<Promise<void>>();
+  /** Overall limit for sending one invite email in the background. */
+  sendTimeoutMs = INVITE_SEND_TIMEOUT_MS;
 
   constructor(
     @InjectRepository(TripInvite) private readonly invites: Repository<TripInvite>,
@@ -60,14 +84,22 @@ export class InvitesService {
     this.baseUrl = (config.get<string>('APP_INVITE_BASE_URL') || DEFAULT_INVITE_BASE_URL).replace(/\/+$/, '');
   }
 
-  /** Owner or editor. Email invites are also sent through the `InviteMailer`. */
-  async create(user: AuthUser, tripId: string, data: CreateInviteDto): Promise<InviteDto> {
+  /**
+   * Owner or editor. Responds as soon as the invite exists: an email invite is then sent in the
+   * background through the `InviteMailer`, in `locale` (the inviter's language), within
+   * `sendTimeoutMs`. A failed send is logged at warn and the invite still stands.
+   * Email invites are rate limited (RATE_LIMITED, nothing created); link invites aren't.
+   */
+  async create(user: AuthUser, tripId: string, data: CreateInviteDto, locale: Locale = DEFAULT_LOCALE): Promise<InviteDto> {
     const { trip } = await this.appTrips.requireMembership(user, tripId, ['owner', 'editor']);
+    const email = data.email ? normalizeEmail(data.email) : null;
+    if (email !== null) await this.enforceEmailInviteLimits(user.id, tripId, email);
+
     const token = newToken();
     const invite = await this.invites.save(
       this.invites.create({
         tripId,
-        email: data.email ?? null,
+        email,
         tokenHash: hashToken(token),
         role: data.role ?? DEFAULT_INVITE_ROLE,
         createdBy: user.id,
@@ -87,25 +119,87 @@ export class InvitesService {
     };
 
     if (invite.email !== null) {
-      try {
-        const invitedBy = (await this.users.getProfiles([user.id])).get(user.id)?.displayName ?? user.email;
+      const recipient = invite.email;
+      this.inBackground(invite.id, [token, recipient], async () => {
+        const name = (await this.users.getProfiles([user.id])).get(user.id)?.displayName?.trim();
         await this.mailer.sendInvite({
           inviteId: invite.id,
           tripId,
-          email: invite.email,
+          email: recipient,
           role: invite.role,
           destination: trip!.destination,
-          invitedBy,
+          startDate: trip!.startDate,
+          endDate: trip!.endDate,
+          // Never the inviter's email: without a display name the template says "a Holid.ai traveler".
+          invitedBy: name || null,
           url: dto.url,
           deepLink: dto.deepLink,
           expiresAt: new Date(invite.expiresAt),
+          locale,
         });
-      } catch (error) {
-        // The invite stands: the inviter still has the link to share.
-        this.logger.error(`Sending invite ${invite.id} failed`, error instanceof Error ? error.stack : String(error));
-      }
+      });
     }
     return dto;
+  }
+
+  /** Resolves once every background invite email has finished (used by tests and on shutdown). */
+  async whenEmailsSettled(): Promise<void> {
+    await Promise.allSettled([...this.pendingEmails]);
+  }
+
+  async onApplicationShutdown(): Promise<void> {
+    await this.whenEmailsSettled();
+  }
+
+  /**
+   * Sliding windows over trip_invites.createdAt. Every email invite row counts (revoked or not
+   * delivered too); a refused attempt creates none. Emails are stored lowercased, so recipients
+   * match case-insensitively. Under heavy concurrency a burst can briefly exceed a limit.
+   */
+  private async enforceEmailInviteLimits(inviterId: string, tripId: string, email: string): Promise<void> {
+    const now = Date.now();
+    await this.enforceLimit(
+      { tripId, email },
+      EMAIL_INVITE_LIMITS.perRecipient,
+      now,
+      'This address was invited to this trip a few minutes ago; try again later',
+    );
+    await this.enforceLimit(
+      { createdBy: inviterId, email: Not(IsNull()) },
+      EMAIL_INVITE_LIMITS.perInviter,
+      now,
+      'Too many email invites in the last 24 hours; try again later',
+    );
+  }
+
+  private async enforceLimit(
+    where: FindOptionsWhere<TripInvite>,
+    { max, windowMs }: { max: number; windowMs: number },
+    now: number,
+    message: string,
+  ): Promise<void> {
+    const rows = await this.invites.find({
+      where: { ...where, createdAt: MoreThan(new Date(now - windowMs)) },
+      order: { createdAt: 'ASC' },
+      select: { id: true, createdAt: true },
+    });
+    if (rows.length < max) return;
+    // A slot frees up when enough of the counted rows have left the window.
+    const freedAt = new Date(rows[rows.length - max].createdAt).getTime() + windowMs;
+    throw new AppError('RATE_LIMITED', message, undefined, { retryAfterSeconds: (freedAt - now) / 1000 });
+  }
+
+  /** Runs `work` without blocking the request, within `sendTimeoutMs`; failures are logged at warn, redacted. */
+  private inBackground(inviteId: string, secrets: string[], work: () => Promise<void>): void {
+    const job = withTimeout(work(), this.sendTimeoutMs)
+      .catch((error: unknown) => {
+        // Provider errors can echo the address or the link: keep both (and any link) out of the logs.
+        const raw = error instanceof Error ? error.message : String(error);
+        const detail = redactLinks(redactValues(raw, secrets.map((secret) => [secret, '[redacted]'] as [string, string])));
+        this.logger.warn(`Sending invite ${inviteId} failed: ${detail}`);
+      })
+      .finally(() => this.pendingEmails.delete(job));
+    this.pendingEmails.add(job);
   }
 
   /** Any signed-in user holding a usable token. */
