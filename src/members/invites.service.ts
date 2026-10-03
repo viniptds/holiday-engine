@@ -192,7 +192,8 @@ export class InvitesService {
    * unchanged (the invite isn't used up). An email invite only works for the account with that
    * email, and never for a dev-login account, whose email is unverified (FORBIDDEN otherwise,
    * invite left unused); it's claimed with a conditional update inside the transaction, so two
-   * concurrent accepts can't both use it. Someone the owner removed can't rejoin through a link
+   * concurrent accepts can't both use it. The invite row is locked for the whole transaction, so a
+   * concurrent revoke is ordered before or after the accept, never in between. Someone the owner removed can't rejoin through a link
    * invite (FORBIDDEN); accepting an email invite to them created after the removal lifts that.
    */
   async accept(user: AuthUser, token: string): Promise<AppTripDto> {
@@ -200,7 +201,13 @@ export class InvitesService {
     let tripId: string;
     try {
       tripId = await this.invites.manager.transaction(async (manager) => {
-        const invite = await this.findUsable(token, manager.getRepository(TripInvite), now);
+        const found = await this.findUsable(token, manager.getRepository(TripInvite), now);
+        // Lock the invite and re-check it: a revoke (conditional on the same row) either committed
+        // before this, and the invite is no longer usable, or waits until this accept is done. Accept
+        // locks no member rows, so it can't form a lock cycle with remove/updateRole (member rows first,
+        // then invites).
+        const invite = await manager.findOne(TripInvite, { where: { id: found.id }, lock: { mode: 'pessimistic_write' } });
+        if (!invite || !isUsable(invite, now)) throw inviteNotFound();
         const membership = { tripId: invite.tripId, userId: user.id };
         if (await manager.findOne(TripMember, { where: membership })) return invite.tripId;
 

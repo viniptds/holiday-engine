@@ -156,9 +156,9 @@ describe('Invite management (QA feature)', () => {
       return { reached, release };
     }
 
-    // BUG-022: a link invite is joined without a conditional write, so an accept that read it just before
-    // a revoke still adds the member after the owner got 204 for the revoke.
-    it.failing('never lets someone join through a link invite whose revoke already succeeded', async () => {
+    // BUG-022 (fixed): a link invite was joined without a conditional write, so an accept that read it just
+    // before a revoke still added the member after the owner got 204 for the revoke.
+    it('never lets someone join through a link invite whose revoke already succeeded', async () => {
       const id = seedTrip();
       const link = seedInvite(id);
       const hold = holdFirstInviteRead();

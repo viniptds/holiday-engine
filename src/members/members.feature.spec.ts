@@ -894,6 +894,61 @@ describe('Members and invites API (feature)', () => {
       expect((await call('DELETE', `/trips/${id}/invites/${inviteId(dead)}`, EDITOR)).status).toBe(404);
     });
 
+    describe('racing an accept (BUG-022)', () => {
+      /** Pauses the `n`th read of `entity` (1-based) until `release()`; `reached` resolves when it's there. */
+      function pauseRead(entity: unknown, n: number) {
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => (release = resolve));
+        let reads = 0;
+        let arrive!: () => void;
+        const reached = new Promise<void>((resolve) => (arrive = resolve));
+        db.afterRead = async (e) => {
+          if (e === entity && ++reads === n) {
+            arrive();
+            await gate;
+          }
+        };
+        return { reached, release };
+      }
+      const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+      it('orders a revoke after an accept that holds the link invite: both succeed, in that order', async () => {
+        const id = seedTrip();
+        const token = seedInvite(id);
+        // The accept's 2nd invite read is the locked re-read: pause there, holding the lock.
+        const hold = pauseRead(TripInvite, 2);
+        const accept = call('POST', `/invites/${token}/accept`, NEWCOMER);
+        await hold.reached;
+        db.afterRead = undefined;
+        const revoke = call('DELETE', `/trips/${id}/invites/${inviteId(token)}`, OWNER);
+        await settle();
+        // The revoke is waiting for the lock: nothing revoked yet.
+        expect(db.all(TripInvite)[0].revokedAt).toBeNull();
+        hold.release();
+
+        expect((await accept).status).toBe(200);
+        expect((await revoke).status).toBe(204);
+        expect(roleOf(id, NEWCOMER)).toBe('editor');
+        expect((await call('POST', `/invites/${token}/accept`, OUTSIDER)).status).toBe(404);
+      });
+
+      it('makes a revoke that waited for an email-invite accept lose with 404', async () => {
+        const id = seedTrip();
+        const token = seedInvite(id, { email: 'ana@example.com' });
+        const hold = pauseRead(TripInvite, 2);
+        const accept = call('POST', `/invites/${token}/accept`, ANA);
+        await hold.reached;
+        db.afterRead = undefined;
+        const revoke = call('DELETE', `/trips/${id}/invites/${inviteId(token)}`, OWNER);
+        await settle();
+        hold.release();
+
+        expect((await accept).status).toBe(200);
+        expect((await revoke).status).toBe(404);
+        expect(db.all(TripInvite)[0]).toMatchObject({ acceptedBy: ANA, revokedAt: null });
+      });
+    });
+
     it('lets only one of two concurrent revokes succeed', async () => {
       const id = seedTrip();
       const token = seedInvite(id);
@@ -973,6 +1028,37 @@ describe('Members and invites API (feature)', () => {
       expect(res.status).toBe(403);
       expect(await res.json()).toMatchObject({ message: 'You were removed from this trip' });
       expect(db.all(TripInvite, { tokenHash: hashToken(early) })[0].acceptedAt).toBeNull();
+    });
+
+    // S-24, the ordering the in-memory DB can model soundly: the accept reads the membership (still
+    // there) before the removal commits. (An accept landing inside the removal's transaction can't be
+    // modelled: InMemoryDb has no isolation, so it would see the deleted membership before the
+    // removal row, which Postgres never shows. Covered by the serial cases above instead.)
+    it('never leaves a member behind when the removal lands while their accept is in flight', async () => {
+      const id = seedTrip();
+      const link = seedInvite(id);
+      expect((await call('POST', `/invites/${link}/accept`, NEWCOMER)).status).toBe(200);
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      let arrive!: () => void;
+      const reached = new Promise<void>((resolve) => (arrive = resolve));
+      let held = false;
+      db.afterRead = async (entity) => {
+        // The accept's membership check (it's already a member, so it returns early).
+        if (entity === TripMember && !held) {
+          held = true;
+          arrive();
+          await gate;
+        }
+      };
+      const accept = call('POST', `/invites/${link}/accept`, NEWCOMER);
+      await reached;
+      expect((await call('DELETE', `/trips/${id}/members/${NEWCOMER}`, OWNER)).status).toBe(204);
+      release();
+
+      expect((await accept).status).toBe(404);
+      expect(roleOf(id, NEWCOMER)).toBeUndefined();
+      expect(db.all(TripRemoval, { tripId: id, userId: NEWCOMER })).toHaveLength(1);
     });
 
     it("doesn't treat leaving as a removal", async () => {
