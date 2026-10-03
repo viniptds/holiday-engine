@@ -24,6 +24,7 @@ Requires **Node 24+**. Homebrew's `node@22` (22.12) fails inside the Nest CLI wi
 - Tests are `*.spec.ts` next to the code. They use `@nestjs/testing`, and mocks are created with `jest` imported from `@jest/globals` (no global `jest` under ESM). `*.feature.spec.ts` wire real modules with stubbed queues and repositories.
 - With `isolatedModules` + `emitDecoratorMetadata`, interfaces and types used in a decorated constructor must be imported with `import type`.
 - TypeScript is pinned to 6.0: ts-jest and the Nest CLI don't support TypeScript 7 yet.
+- `main.ts` sets the HTTP server's `keepAliveTimeout` from `HTTP_KEEP_ALIVE_TIMEOUT_MS` (default 65000, above common load-balancer idle timeouts; BUG-023) and `headersTimeout` to that + 1000; an invalid value fails startup (`http-server.config.ts`).
 - `AppModule` sets up `ConfigModule` (global, reads `.env`), the BullMQ Redis connection, TypeORM, and `ScheduleModule`. Each feature is its own module under `src/<feature>/`.
 
 **There is no HTTP API for trips.** Everything goes through queues:
