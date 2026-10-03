@@ -68,6 +68,13 @@ export class Trip {
   @Column({ type: 'jsonb', nullable: true })
   travelerProfile: TravelerProfile | null;
 
+  /**
+   * App trips' itinerary version (optimistic concurrency): +1 on every itinerary change, always
+   * under the trip row lock. Never written from a trip loaded without that lock.
+   */
+  @Column({ type: 'int', default: 0 })
+  itineraryVersion: number;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

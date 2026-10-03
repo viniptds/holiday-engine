@@ -24,7 +24,7 @@ export function appDb(): InMemoryDb {
     })
     .define(Trip, {
       primary: ['id'],
-      generate: () => ({ id: randomUUID(), createdAt: new Date(), updatedAt: new Date() }),
+      generate: () => ({ id: randomUUID(), createdAt: new Date(), updatedAt: new Date(), itineraryVersion: 0 }),
       updateDate: 'updatedAt',
     })
     .define(TripMember, {

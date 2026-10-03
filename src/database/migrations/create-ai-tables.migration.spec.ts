@@ -7,6 +7,7 @@ import { migrations } from './index.js';
 import { AiConversation } from '../../ai/entities/ai-conversation.entity.js';
 import { AiMessage } from '../../ai/entities/ai-message.entity.js';
 import { TripPlace } from '../../ai/entities/trip-place.entity.js';
+import { AddItinerary1760500000000 } from './1760500000000-add-itinerary.js';
 
 const normalize = (sql: string) => sql.replace(/\s+/g, ' ').trim();
 
@@ -90,7 +91,12 @@ describe('CreateAiTables1760400000000', () => {
   ];
 
   it.each(entities)('matches the %s entity checks, uniques, indexes and relations', async (_name, entity, relations) => {
-    const sql = [...(await run('up')), ...(await run('up', new AddAiMessageAttempts1760400100000()))].join('\n');
+    // Later migrations that add to these tables count too (AddItinerary: trip_places position/startTime).
+    const sql = [
+      ...(await run('up')),
+      ...(await run('up', new AddAiMessageAttempts1760400100000())),
+      ...(await run('up', new AddItinerary1760500000000())),
+    ].join('\n');
     const storage = getMetadataArgsStorage();
 
     for (const check of storage.checks.filter((c) => c.target === entity)) {
