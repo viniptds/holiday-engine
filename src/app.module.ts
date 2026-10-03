@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller.js';
 import { MessagesModule } from './messages/messages.module.js';
+import { TripsModule } from './trips/trips.module.js';
+import { databaseConfig } from './database/database.config.js';
 
 @Module({
   imports: [
@@ -16,7 +19,12 @@ import { MessagesModule } from './messages/messages.module.js';
         },
       }),
     }),
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: databaseConfig,
+    }),
     MessagesModule,
+    TripsModule,
   ],
   controllers: [AppController],
 })
