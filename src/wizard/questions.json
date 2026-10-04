@@ -13,7 +13,7 @@
     },
     {
       "id": "interests",
-      "title": { "en": "What makes a great day?", "pt-BR": "O que faz um dia incrível?", "es": "¿Qué hace un gran día?" },
+      "title": { "en": "What makes a great day?", "pt-BR": "O que faz um dia ser incrível?", "es": "¿Qué hace que un día sea genial?" },
       "type": "multi",
       "max": 3,
       "options": [
@@ -29,9 +29,9 @@
       "title": { "en": "How do you like to spend?", "pt-BR": "Como você gosta de gastar?", "es": "¿Cómo te gusta gastar?" },
       "type": "single",
       "options": [
-        { "id": "saver", "label": { "en": "Smart saver", "pt-BR": "Econômico", "es": "Ahorrador" }, "icon": "piggy-bank" },
+        { "id": "saver", "label": { "en": "Smart saver", "pt-BR": "Gastar com cabeça", "es": "Ahorrar con cabeza" }, "icon": "piggy-bank" },
         { "id": "comfort", "label": { "en": "Comfort first", "pt-BR": "Conforto primeiro", "es": "Comodidad ante todo" }, "icon": "sofa", "tags": ["relaxer"] },
-        { "id": "treat", "label": { "en": "Treat yourself", "pt-BR": "Se dar um mimo", "es": "Darte un gusto" }, "icon": "gem" }
+        { "id": "treat", "label": { "en": "Treat yourself", "pt-BR": "Me dar um mimo", "es": "Darme un gusto" }, "icon": "gem" }
       ]
     }
   ],
