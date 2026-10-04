@@ -18,6 +18,8 @@ export type ModelDraft = {
   story: string | null;
   places: { name: string; category: PlaceCategory; day: number | null; why: string }[];
   questions: string[];
+  /** Wizard answers the traveler clearly stated; empty (or absent) otherwise. Checked by the engine. */
+  travelerAnswers?: { questionId: string; optionIds: string[] }[];
 };
 
 const nullable = (schema: JsonSchema): JsonSchema => ({ anyOf: [schema, { type: 'null' }] });
@@ -57,8 +59,21 @@ export const MODEL_DRAFT_SCHEMA: JsonSchema = {
       description: `At most ${MAX_DRAFT_QUESTIONS} short questions for missing information.`,
       items: { type: 'string' },
     },
+    travelerAnswers: {
+      type: 'array',
+      description: 'Traveler-profile answers the traveler clearly stated in their own messages; an empty array otherwise. Never guess.',
+      items: {
+        type: 'object',
+        properties: {
+          questionId: { type: 'string' },
+          optionIds: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['questionId', 'optionIds'],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ['reply', 'destination', 'startDate', 'endDate', 'partyType', 'partySize', 'story', 'places', 'questions'],
+  required: ['reply', 'destination', 'startDate', 'endDate', 'partyType', 'partySize', 'story', 'places', 'questions', 'travelerAnswers'],
   additionalProperties: false,
 };
 
@@ -76,6 +91,15 @@ class ModelPlaceDto {
 
   @IsString()
   why: string;
+}
+
+class ModelTravelerAnswerDto {
+  @IsString()
+  questionId: string;
+
+  @IsString({ each: true })
+  @IsArray()
+  optionIds: string[];
 }
 
 class ModelDraftDto {
@@ -114,6 +138,13 @@ class ModelDraftDto {
   @IsString({ each: true })
   @IsArray()
   questions: string[];
+
+  // Optional for robustness: a missing list means "nothing stated".
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => ModelTravelerAnswerDto)
+  @IsArray()
+  travelerAnswers?: ModelTravelerAnswerDto[];
 }
 
 /** The model output, or the name of the first problem (for the retry note and logs). */
@@ -141,6 +172,7 @@ export async function parseModelDraft(json: unknown): Promise<{ draft: ModelDraf
       story: dto.story ?? null,
       places: dto.places.map((p) => ({ name: p.name, category: p.category, day: p.day ?? null, why: p.why })),
       questions: dto.questions,
+      travelerAnswers: (dto.travelerAnswers ?? []).map((a) => ({ questionId: a.questionId, optionIds: a.optionIds })),
     },
   };
 }
@@ -221,6 +253,8 @@ export function normalizeDraft(model: ModelDraft): TripDraft {
       .map((q) => cleanText(q, 300))
       .filter((q): q is string => q !== null)
       .slice(0, MAX_DRAFT_QUESTIONS),
+    // Unchecked here; the service keeps only answers valid for the question set.
+    travelerAnswers: Object.fromEntries((model.travelerAnswers ?? []).map((a) => [a.questionId, a.optionIds])),
   };
 }
 
@@ -239,6 +273,7 @@ export function replayText(reply: string, draft: TripDraft | null): string {
     story: draft?.story ?? null,
     places: (draft?.places ?? []).map((p) => ({ name: p.name, category: p.category, day: p.day, why: p.why })),
     questions: draft?.questions ?? [],
+    travelerAnswers: Object.entries(draft?.travelerAnswers ?? {}).map(([questionId, optionIds]) => ({ questionId, optionIds })),
   };
   return JSON.stringify(model);
 }

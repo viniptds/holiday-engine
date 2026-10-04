@@ -59,6 +59,12 @@ export type TripDraft = {
   places: DraftPlace[];
   /** What the AI still needs, in the request language. */
   questions: string[];
+  /**
+   * Wizard answers (questionId → option ids) the traveler clearly stated in the chat, checked
+   * against the question set; `{}` when none. A new trip created on confirm gets them as its
+   * travelerProfile (so a persona). Drafts stored before this field existed lack it.
+   */
+  travelerAnswers?: Record<string, string[]>;
 };
 
 export type AiConversationDto = {

@@ -27,6 +27,9 @@ const TEXT: Record<Locale, { where: string; when: string; ready: (d: string) => 
 
 const DESTINATION = /\b(?:to|in|visit|visiting|para|em|a|en)\s+(\p{Lu}[\p{L}'-]+(?:\s\p{Lu}[\p{L}'-]+)*)/u;
 const DATE = /\b\d{4}-\d{2}-\d{2}\b/g;
+// A clearly stated pace (the only traveler answer the mock fills, so persona flows can run offline).
+const RELAXED = /\b(relaxed|slow|calm|tranquil[oa]?|relajad[oa]|devagar|sem pressa)\b/i;
+
 const PEOPLE = /\b(\d{1,2})\s*(?:people|persons|travell?ers|adults|pessoas|personas)\b/i;
 
 function localeOf(system: string): Locale {
@@ -81,6 +84,7 @@ export class MockLlmProvider implements LlmProvider {
         ]
       : [];
 
+    const relaxed = input.history.some((e) => e.role === 'user' && RELAXED.test(e.text));
     const draft: ModelDraft = {
       reply: destination && startDate && endDate ? text.ready(destination) : text.more,
       destination,
@@ -91,6 +95,7 @@ export class MockLlmProvider implements LlmProvider {
       story: before?.story ?? null,
       places,
       questions,
+      travelerAnswers: relaxed ? [{ questionId: 'pace', optionIds: ['slow'] }] : [],
     };
     const inputTokens = input.system.length + input.history.reduce((n, e) => n + e.text.length, 0);
     return { json: draft, model: 'mock', inputTokens: Math.ceil(inputTokens / 4), outputTokens: 100 };

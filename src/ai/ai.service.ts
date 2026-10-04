@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { EntityManager, In, MoreThanOrEqual, Repository } from 'typeorm';
-import { AppError } from '../app-common/app-error.js';
+import { AppError, conflict } from '../app-common/app-error.js';
 import type { AuthUser } from '../app-common/auth-user.js';
 import type { Locale } from '../app-common/locale.js';
 import { appValidationPipe } from '../app-common/app-validation.pipe.js';
@@ -27,10 +27,11 @@ import { AiUnavailableError, LLM_PROVIDER } from './llm/llm-provider.js';
 import type { LlmHistoryEntry, LlmProvider } from './llm/llm-provider.js';
 import { PlacesVerifier } from './places/places-verifier.js';
 import { ItineraryService } from './itinerary.service.js';
+import { WizardService } from '../wizard/wizard.service.js';
 import type { NewTripPlace } from './itinerary.service.js';
 
 const conversationNotFound = () => new AppError('NOT_FOUND', 'Conversation not found');
-const notOpen = (status: string) => new AppError('CONFLICT', `This plan is ${status}; start a new one`);
+const notOpen = (status: string) => conflict('CONVERSATION_CLOSED', `This plan is ${status}; start a new one`);
 const aiUnavailable = () =>
   new AppError('AI_UNAVAILABLE', 'The trip planner is unavailable right now. Please try again in a moment.');
 
@@ -116,6 +117,7 @@ export class AiService {
     private readonly verifier: PlacesVerifier,
     private readonly appTrips: AppTripsService,
     private readonly itinerary: ItineraryService,
+    private readonly wizard: WizardService,
   ) {}
 
   /** Starts a conversation with its first message. With `tripId`, the caller must be owner or editor. */
@@ -179,10 +181,10 @@ export class AiService {
       const last = history.at(-1);
       if (last?.role === 'user' && last.text === message) {
         if (last.replyingUntil && new Date(last.replyingUntil).getTime() > Date.now()) {
-          throw new AppError('CONFLICT', 'A reply is already being prepared');
+          throw conflict('REPLY_IN_PROGRESS', 'A reply is already being prepared');
         }
         if (last.attempts >= MAX_TURN_ATTEMPTS) {
-          throw new AppError('CONFLICT', 'This message failed too many times; send a different message or start a new plan');
+          throw conflict('RETRY_LIMIT', 'This message failed too many times; send a different message or start a new plan');
         }
         await this.checkRateLimit(manager, user.id);
         // The retry is counted at its own time: the row moves to now (it's the latest message anyway).
@@ -193,7 +195,7 @@ export class AiService {
       } else {
         const sent = history.filter((m) => m.role === 'user').length;
         if (sent >= MAX_USER_MESSAGES_PER_CONVERSATION) {
-          throw new AppError('CONFLICT', 'This plan has reached its message limit; start a new plan');
+          throw conflict('PLAN_FULL', 'This plan has reached its message limit; start a new plan');
         }
         await this.checkRateLimit(manager, user.id);
         history.push(
@@ -235,7 +237,7 @@ export class AiService {
     const conversation = await this.requireConversation(user, conversationId);
     if (conversation.status !== 'open') throw notOpen(conversation.status);
     const { affected } = await this.conversations.update({ id: conversation.id, status: 'open' }, { status: 'abandoned' });
-    if (!affected) throw new AppError('CONFLICT', 'This plan is no longer open');
+    if (!affected) throw conflict('CONVERSATION_CLOSED', 'This plan is no longer open');
   }
 
   /**
@@ -258,7 +260,7 @@ export class AiService {
     if (conversation.status !== 'open') throw notOpen(conversation.status);
 
     const draft = (await this.history(conversation.id)).filter((m) => m.role === 'assistant').at(-1)?.draft ?? null;
-    if (!draft?.ready) throw new AppError('CONFLICT', "The plan isn't ready yet: it needs a destination and dates");
+    if (!draft?.ready) throw conflict('DRAFT_NOT_READY', "The plan isn't ready yet: it needs a destination and dates");
     const selected = selectPlaces(draft.places, placeIds);
     let counts = { added: 0, skipped: 0 };
     const accept = async (manager: EntityManager, tripId: string) => {
@@ -282,6 +284,10 @@ export class AiService {
         story: draft.story ?? undefined,
         partyType: draft.partyType ?? undefined,
         partySize: draft.partySize ?? undefined,
+        // Answers the traveler stated in the chat give the new trip its persona (wizard rules).
+        ...(Object.keys(draft.travelerAnswers ?? {}).length > 0
+          ? { travelerProfile: { questionSetVersion: this.wizard.version, answers: draft.travelerAnswers } }
+          : {}),
       };
       // The same validation as POST /trips.
       const data = (await appValidationPipe.transform(fields, { type: 'body', metatype: CreateAppTripDto })) as CreateAppTripDto;
@@ -318,7 +324,7 @@ export class AiService {
     conversation: AiConversation,
     locale: Locale,
   ): Promise<{ trip: AppTripDto; created: boolean }> {
-    if (!conversation.tripId) throw new AppError('CONFLICT', 'The trip of this plan was deleted');
+    if (!conversation.tripId) throw conflict('CONVERSATION_CLOSED', 'The trip of this plan was deleted');
     return { trip: await this.appTrips.get(user, conversation.tripId, locale), created: false };
   }
 
@@ -398,7 +404,13 @@ export class AiService {
     try {
       // One retry when the output doesn't match the schema, naming the problem.
       for (let attempt = 0; attempt < 2 && !model; attempt += 1) {
-        const system = buildSystemPrompt({ today: todayUtc(), locale, linkedTrip, correction });
+        const system = buildSystemPrompt({
+          today: todayUtc(),
+          locale,
+          linkedTrip,
+          correction,
+          travelerQuestions: this.wizard.plannerQuestions(),
+        });
         const result = await this.llm.draftTurn({ system, history: entries, schema: MODEL_DRAFT_SCHEMA, signal });
         usage = {
           model: result.model,
@@ -420,6 +432,8 @@ export class AiService {
     }
 
     const draft = normalizeDraft(model);
+    // Only answers valid for the question set; anything else the model said is dropped.
+    draft.travelerAnswers = this.wizard.sanitizeAnswers(draft.travelerAnswers ?? {});
     if (linkedTrip) applyLinkedTrip(draft, linkedTrip);
     draft.places = await this.verifier.verify(conversation.id, locale, draft, previous);
 

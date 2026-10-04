@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { EntityManager, Repository } from 'typeorm';
-import { AppError } from '../app-common/app-error.js';
+import { AppError, conflict } from '../app-common/app-error.js';
 import type { AuthUser } from '../app-common/auth-user.js';
 import type { Locale } from '../app-common/locale.js';
 import { AppTripsService } from '../app-trips/app-trips.service.js';
@@ -25,8 +25,8 @@ const MAX_TRACKED_SEARCHERS = 10_000;
 
 const placeNotFound = () => new AppError('NOT_FOUND', 'Place not found');
 const tripNotFound = () => new AppError('NOT_FOUND', 'Trip not found');
-const alreadyInTrip = () => new AppError('CONFLICT', 'Already in this trip');
-const tripFull = () => new AppError('CONFLICT', `A trip can hold at most ${MAX_TRIP_PLACES} places`);
+const alreadyInTrip = () => conflict('ALREADY_IN_TRIP', 'Already in this trip');
+const tripFull = () => conflict('TRIP_PLACES_LIMIT', `A trip can hold at most ${MAX_TRIP_PLACES} places`);
 const placesUnavailable = () =>
   new AppError('AI_UNAVAILABLE', 'Place search is unavailable right now. Please try again in a moment.');
 const invalid = (fields: Record<string, string>) => new AppError('VALIDATION', 'Some fields are invalid', fields);
@@ -220,7 +220,7 @@ export class ItineraryService {
       const locked = await this.lockTrip(manager, trip!.id);
       const version = locked.itineraryVersion ?? 0;
       if (data.itineraryVersion !== version) {
-        throw new AppError('CONFLICT', `The itinerary changed (current version ${version}); reload it and try again`, {
+        throw conflict('STALE_ITINERARY', `The itinerary changed (current version ${version}); reload it and try again`, {
           itineraryVersion: String(version),
         });
       }

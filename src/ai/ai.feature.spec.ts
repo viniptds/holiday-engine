@@ -329,7 +329,7 @@ describe('AI trip planning API (feature)', () => {
       ] as const) {
         const response = await call('POST', `/ai/conversations/${id}${path}`, AUTHOR, body);
         expect(response.status).toBe(409);
-        expect(await response.json()).toMatchObject({ code: 'CONFLICT' });
+        expect(await response.json()).toMatchObject({ code: 'CONFLICT', reason: 'CONVERSATION_CLOSED' });
       }
       expect(db.all(AiConversation)[0].status).toBe('abandoned');
     });
@@ -338,8 +338,9 @@ describe('AI trip planning API (feature)', () => {
       const conversation = seedConversation(AUTHOR);
       seedUserMessages(conversation.id, 40, (i) => (40 - i) * HOUR * 2);
 
-      const { response } = await send(conversation.id, 'one more');
+      const { response, body } = await send(conversation.id, 'one more');
       expect(response.status).toBe(409);
+      expect(body).toMatchObject({ code: 'CONFLICT', reason: 'PLAN_FULL' });
       expect(db.all(AiMessage, { conversationId: conversation.id })).toHaveLength(40);
       expect(llm.calls).toHaveLength(0);
     });
@@ -502,6 +503,7 @@ describe('AI trip planning API (feature)', () => {
 
       const refused = await send(id, 'From 2026-11-10 to 2026-11-14');
       expect(refused.response.status).toBe(409);
+      expect(refused.body).toMatchObject({ code: 'CONFLICT', reason: 'RETRY_LIMIT' });
       expect(llm.calls).toHaveLength(5);
 
       // A different message is a new turn.
@@ -525,7 +527,7 @@ describe('AI trip planning API (feature)', () => {
       // While the first reply is being prepared, the second send is refused at once.
       const refused = await Promise.race(sends);
       expect(refused.response.status).toBe(409);
-      expect(refused.body).toEqual({ code: 'CONFLICT', message: 'A reply is already being prepared' });
+      expect(refused.body).toEqual({ code: 'CONFLICT', reason: 'REPLY_IN_PROGRESS', message: 'A reply is already being prepared' });
       const [pending] = db.all(AiMessage, { conversationId: id, text: DATES });
       expect(pending.attempts).toBe(1);
       const markMs = new Date(pending.replyingUntil!).getTime() - new Date(pending.createdAt).getTime();
@@ -546,9 +548,10 @@ describe('AI trip planning API (feature)', () => {
       const conversation = seedConversation(AUTHOR);
       db.seed(AiMessage, { conversationId: conversation.id, role: 'user', text: DATES, replyingUntil: new Date(Date.now() + 60_000) });
 
-      const { response } = await send(conversation.id, DATES);
+      const { response, body } = await send(conversation.id, DATES);
 
       expect(response.status).toBe(409);
+      expect(body).toMatchObject({ code: 'CONFLICT', reason: 'REPLY_IN_PROGRESS' });
       expect(llm.calls).toHaveLength(0);
       expect(db.all(AiMessage)).toEqual([expect.objectContaining({ attempts: 1 })]);
     });
@@ -603,10 +606,37 @@ describe('AI trip planning API (feature)', () => {
   });
 
   describe('confirm', () => {
+    it('gives a new trip the persona of answers the traveler clearly stated, and none otherwise', async () => {
+      const stated = await start('A relaxed trip to Lisbon from 2026-11-10 to 2026-11-14 for 2 people');
+      expect(stated.body.turn.draft).toMatchObject({ ready: true, travelerAnswers: { pace: ['slow'] } });
+      expect(llm.calls[0].system).toContain('pace (');
+
+      const confirmed = await call('POST', `/ai/conversations/${stated.body.conversation.id}/confirm`, AUTHOR, {}, { 'accept-language': 'pt-BR' });
+      expect(confirmed.status).toBe(201);
+      const trip = (await confirmed.json()) as AppTripDto;
+      expect(trip.travelerProfile).toEqual({ questionSetVersion: expect.any(Number), answers: { pace: ['slow'] }, persona: expect.any(String) });
+      // Stored as the persona key, like the wizard does.
+      expect(db.all(Trip, { id: trip.id })[0].travelerProfile).toMatchObject({ answers: { pace: ['slow'] }, persona: 'relaxer' });
+
+      const unstated = await start('A trip to Porto from 2026-11-10 to 2026-11-14');
+      expect(unstated.body.turn.draft!.travelerAnswers).toEqual({});
+      const plain = (await (await call('POST', `/ai/conversations/${unstated.body.conversation.id}/confirm`, AUTHOR, {})).json()) as AppTripDto;
+      expect(plain.travelerProfile).toBeNull();
+    });
+
+    it("leaves a linked trip's traveler profile alone", async () => {
+      const trip = seedTrip([[AUTHOR, 'owner']]);
+      const { body } = await start('A relaxed day of places in Porto', AUTHOR, { tripId: trip.id });
+
+      expect((await call('POST', `/ai/conversations/${body.conversation.id}/confirm`, AUTHOR, {})).status).toBe(200);
+      expect(db.all(Trip, { id: trip.id })[0].travelerProfile).toBeNull();
+    });
+
     it('refuses a draft that is not ready', async () => {
       const { body } = await start('A trip to Lisbon');
       const response = await call('POST', `/ai/conversations/${body.conversation.id}/confirm`, AUTHOR, {});
       expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ code: 'CONFLICT', reason: 'DRAFT_NOT_READY' });
       expect(db.all(Trip)).toHaveLength(0);
     });
 
@@ -641,7 +671,9 @@ describe('AI trip planning API (feature)', () => {
       expect(db.all(Trip)).toHaveLength(1);
       expect(db.all(TripPlace)).toHaveLength(2);
 
-      expect((await send(id, 'one more thing')).response.status).toBe(409);
+      const closed = await send(id, 'one more thing');
+      expect(closed.response.status).toBe(409);
+      expect(closed.body).toMatchObject({ reason: 'CONVERSATION_CLOSED' });
     });
 
     it('rolls everything back when saving the places fails', async () => {

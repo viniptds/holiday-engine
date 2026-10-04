@@ -22,6 +22,22 @@ describe('buildSystemPrompt', () => {
     }
   });
 
+  it('lists the traveler-profile ids and says to answer only what the traveler clearly states', () => {
+    const prompt = buildSystemPrompt({
+      ...base,
+      travelerQuestions: [
+        { id: 'pace', title: "What's your travel pace?", type: 'single', optionIds: ['slow', 'balanced', 'packed'] },
+        { id: 'interests', title: 'What makes a great day?', type: 'multi', max: 3, optionIds: ['food', 'culture'] },
+      ],
+    });
+
+    expect(prompt).toContain('fill an answer ONLY when the traveler clearly states it');
+    expect(prompt).toContain('Never guess');
+    expect(prompt).toContain("- pace (What's your travel pace?; one option): slow, balanced, packed");
+    expect(prompt).toContain('- interests (What makes a great day?; up to 3 options): food, culture');
+    expect(buildSystemPrompt(base)).not.toContain('travelerAnswers');
+  });
+
   it('is stable for the same inputs (cacheable)', () => {
     expect(buildSystemPrompt(base)).toBe(buildSystemPrompt({ ...base }));
   });

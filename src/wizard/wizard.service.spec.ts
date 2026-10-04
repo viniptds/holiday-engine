@@ -212,3 +212,27 @@ describe('personaKey / personaLabel', () => {
     expect(personaLabel(SET, 'Unknown', 'en')).toBeNull();
   });
 });
+
+describe('WizardService answers proposed by the AI planner', () => {
+  const wizard = new WizardService(SET);
+
+  it('keeps only known questions and options, without repeats, capped per question', () => {
+    expect(
+      wizard.sanitizeAnswers({
+        pace: ['slow', 'packed'],
+        interests: ['food', 'food', 'golf', 'beach', 'hiking'],
+        budget: ['saver'],
+        mood: [],
+      }),
+    ).toEqual({ pace: ['slow'], interests: ['food', 'beach'] });
+    expect(wizard.sanitizeAnswers({ pace: ['fast'], interests: 'food' as never })).toEqual({});
+  });
+
+  it('describes the questions by id for the prompt, and gives the version', () => {
+    expect(wizard.plannerQuestions()).toEqual([
+      { id: 'pace', title: 'Pace?', type: 'single', optionIds: ['slow', 'packed', 'either'] },
+      { id: 'interests', title: 'Interests?', type: 'multi', max: 2, optionIds: ['food', 'beach', 'hiking', 'shops'] },
+    ]);
+    expect(wizard.version).toBe(3);
+  });
+});

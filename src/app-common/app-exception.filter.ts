@@ -25,6 +25,7 @@ function httpExceptionMessage(exception: HttpException): string {
 export function toAppErrorBody(exception: unknown): { status: number; body: AppErrorBody; headers?: Record<string, string> } {
   if (exception instanceof AppError) {
     const body: AppErrorBody = { code: exception.code, message: exception.message };
+    if (exception.reason) body.reason = exception.reason;
     if (exception.fields) body.fields = exception.fields;
     const { retryAfterSeconds } = exception.options;
     if (retryAfterSeconds !== undefined) {
