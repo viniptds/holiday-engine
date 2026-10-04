@@ -606,6 +606,32 @@ describe('AI trip planning API (feature)', () => {
   });
 
   describe('confirm', () => {
+    it('gives a new trip the persona of answers the traveler clearly stated, and none otherwise', async () => {
+      const stated = await start('A relaxed trip to Lisbon from 2026-11-10 to 2026-11-14 for 2 people');
+      expect(stated.body.turn.draft).toMatchObject({ ready: true, travelerAnswers: { pace: ['slow'] } });
+      expect(llm.calls[0].system).toContain('pace (');
+
+      const confirmed = await call('POST', `/ai/conversations/${stated.body.conversation.id}/confirm`, AUTHOR, {}, { 'accept-language': 'pt-BR' });
+      expect(confirmed.status).toBe(201);
+      const trip = (await confirmed.json()) as AppTripDto;
+      expect(trip.travelerProfile).toEqual({ questionSetVersion: expect.any(Number), answers: { pace: ['slow'] }, persona: expect.any(String) });
+      // Stored as the persona key, like the wizard does.
+      expect(db.all(Trip, { id: trip.id })[0].travelerProfile).toMatchObject({ answers: { pace: ['slow'] }, persona: 'relaxer' });
+
+      const unstated = await start('A trip to Porto from 2026-11-10 to 2026-11-14');
+      expect(unstated.body.turn.draft!.travelerAnswers).toEqual({});
+      const plain = (await (await call('POST', `/ai/conversations/${unstated.body.conversation.id}/confirm`, AUTHOR, {})).json()) as AppTripDto;
+      expect(plain.travelerProfile).toBeNull();
+    });
+
+    it("leaves a linked trip's traveler profile alone", async () => {
+      const trip = seedTrip([[AUTHOR, 'owner']]);
+      const { body } = await start('A relaxed day of places in Porto', AUTHOR, { tripId: trip.id });
+
+      expect((await call('POST', `/ai/conversations/${body.conversation.id}/confirm`, AUTHOR, {})).status).toBe(200);
+      expect(db.all(Trip, { id: trip.id })[0].travelerProfile).toBeNull();
+    });
+
     it('refuses a draft that is not ready', async () => {
       const { body } = await start('A trip to Lisbon');
       const response = await call('POST', `/ai/conversations/${body.conversation.id}/confirm`, AUTHOR, {});

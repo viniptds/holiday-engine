@@ -27,6 +27,7 @@ import { AiUnavailableError, LLM_PROVIDER } from './llm/llm-provider.js';
 import type { LlmHistoryEntry, LlmProvider } from './llm/llm-provider.js';
 import { PlacesVerifier } from './places/places-verifier.js';
 import { ItineraryService } from './itinerary.service.js';
+import { WizardService } from '../wizard/wizard.service.js';
 import type { NewTripPlace } from './itinerary.service.js';
 
 const conversationNotFound = () => new AppError('NOT_FOUND', 'Conversation not found');
@@ -116,6 +117,7 @@ export class AiService {
     private readonly verifier: PlacesVerifier,
     private readonly appTrips: AppTripsService,
     private readonly itinerary: ItineraryService,
+    private readonly wizard: WizardService,
   ) {}
 
   /** Starts a conversation with its first message. With `tripId`, the caller must be owner or editor. */
@@ -282,6 +284,10 @@ export class AiService {
         story: draft.story ?? undefined,
         partyType: draft.partyType ?? undefined,
         partySize: draft.partySize ?? undefined,
+        // Answers the traveler stated in the chat give the new trip its persona (wizard rules).
+        ...(Object.keys(draft.travelerAnswers ?? {}).length > 0
+          ? { travelerProfile: { questionSetVersion: this.wizard.version, answers: draft.travelerAnswers } }
+          : {}),
       };
       // The same validation as POST /trips.
       const data = (await appValidationPipe.transform(fields, { type: 'body', metatype: CreateAppTripDto })) as CreateAppTripDto;
@@ -398,7 +404,13 @@ export class AiService {
     try {
       // One retry when the output doesn't match the schema, naming the problem.
       for (let attempt = 0; attempt < 2 && !model; attempt += 1) {
-        const system = buildSystemPrompt({ today: todayUtc(), locale, linkedTrip, correction });
+        const system = buildSystemPrompt({
+          today: todayUtc(),
+          locale,
+          linkedTrip,
+          correction,
+          travelerQuestions: this.wizard.plannerQuestions(),
+        });
         const result = await this.llm.draftTurn({ system, history: entries, schema: MODEL_DRAFT_SCHEMA, signal });
         usage = {
           model: result.model,
@@ -420,6 +432,8 @@ export class AiService {
     }
 
     const draft = normalizeDraft(model);
+    // Only answers valid for the question set; anything else the model said is dropped.
+    draft.travelerAnswers = this.wizard.sanitizeAnswers(draft.travelerAnswers ?? {});
     if (linkedTrip) applyLinkedTrip(draft, linkedTrip);
     draft.places = await this.verifier.verify(conversation.id, locale, draft, previous);
 

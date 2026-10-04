@@ -70,6 +70,39 @@ export class WizardService {
   }
 
   /**
+   * The valid subset of answers someone else proposed (the AI planner): known questions and
+   * options only, no repeats, at most 1 for a single question and `max` for a multi one (extra
+   * options are dropped). Never throws.
+   */
+  sanitizeAnswers(answers: Record<string, string[]>): Record<string, string[]> {
+    const result: Record<string, string[]> = {};
+    for (const [questionId, values] of Object.entries(answers)) {
+      const question = this.set.questions.find((q) => q.id === questionId);
+      if (!question || !Array.isArray(values)) continue;
+      const max = question.type === 'single' ? 1 : question.max!;
+      const known = [...new Set(values)].filter((v) => question.options.some((o) => o.id === v)).slice(0, max);
+      if (known.length > 0) result[questionId] = known;
+    }
+    return result;
+  }
+
+  /** The current question set version (answers are only valid for it). */
+  get version(): number {
+    return this.set.version;
+  }
+
+  /** The questions as the AI planner may answer them: ids and option ids, English titles. */
+  plannerQuestions(): { id: string; title: string; type: 'single' | 'multi'; max?: number; optionIds: string[] }[] {
+    return this.getQuestionSet('en').questions.map((q) => ({
+      id: q.id,
+      title: q.title,
+      type: q.type,
+      ...(q.type === 'multi' ? { max: q.max } : {}),
+      optionIds: q.options.map((o) => o.id),
+    }));
+  }
+
+  /**
    * A stored profile as the API returns it: the persona as its label in `locale`. Stored
    * personas are keys; older rows hold the English label, which maps back to its key. An
    * unknown persona value is returned as null (see `personaLabel`). Returns a fresh object.

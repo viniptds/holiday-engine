@@ -12,6 +12,7 @@ const model = (overrides: Partial<ModelDraft> = {}): ModelDraft => ({
   story: 'Food and views',
   places: [{ name: 'Time Out Market', category: 'food', day: 1, why: 'Lots of local food' }],
   questions: [],
+  travelerAnswers: [],
   ...overrides,
 });
 
@@ -77,7 +78,15 @@ describe('normalizeDraft', () => {
       story: 'Food and views',
       places: [{ name: 'Time Out Market', category: 'food', day: 1, why: 'Lots of local food', verified: false, place: null }],
       questions: [],
+      travelerAnswers: {},
     });
+  });
+
+  it('keeps the stated traveler answers (unchecked here; the service checks them)', () => {
+    expect(normalizeDraft(model({ travelerAnswers: [{ questionId: 'pace', optionIds: ['slow'] }] })).travelerAnswers).toEqual({
+      pace: ['slow'],
+    });
+    expect(normalizeDraft(model({ travelerAnswers: undefined })).travelerAnswers).toEqual({});
   });
 
   it.each([
@@ -141,5 +150,18 @@ describe('replayText', () => {
 
     expect(JSON.parse(replayText('Here is a plan', draft))).toEqual(model());
     expect(replayText('Here is a plan', draft)).toBe(replayText('Here is a plan', draft));
+  });
+
+  it('replays traveler answers, and none for drafts stored before they existed', () => {
+    const draft = normalizeDraft(model({ travelerAnswers: [{ questionId: 'interests', optionIds: ['food', 'beach'] }] }));
+    expect(JSON.parse(replayText('Hi', draft)).travelerAnswers).toEqual([{ questionId: 'interests', optionIds: ['food', 'beach'] }]);
+    delete draft.travelerAnswers;
+    expect(JSON.parse(replayText('Hi', draft)).travelerAnswers).toEqual([]);
+  });
+
+  it('parses a reply without travelerAnswers as none, and rejects a malformed list', async () => {
+    const { travelerAnswers: _omit, ...withoutAnswers } = model();
+    expect(await parseModelDraft(withoutAnswers)).toMatchObject({ draft: { travelerAnswers: [] } });
+    expect(await parseModelDraft({ ...model(), travelerAnswers: [{ questionId: 'pace', optionIds: 'slow' }] })).toHaveProperty('problem');
   });
 });
