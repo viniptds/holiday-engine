@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { EntityManager, IsNull, Not, Repository } from 'typeorm';
-import { AppError } from '../app-common/app-error.js';
+import { AppError, conflict } from '../app-common/app-error.js';
 import { USER_DIRECTORY } from '../app-common/auth-user.js';
 import type { AuthUser, UserDirectory } from '../app-common/auth-user.js';
 import { Trip } from '../trips/trip.entity.js';
@@ -33,7 +33,7 @@ async function conflictOnRace<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (error) {
-    if (isUniqueViolation(error)) throw new AppError('CONFLICT', 'The trip changed meanwhile; please try again');
+    if (isUniqueViolation(error)) throw conflict('TRIP_CHANGED', 'The trip changed meanwhile; please try again');
     throw error;
   }
 }
@@ -78,7 +78,7 @@ export class MembersService {
 
     if (userId === user.id) {
       if (role !== 'owner') {
-        throw new AppError('CONFLICT', "The owner can't change their own role; transfer ownership instead");
+        throw conflict('LAST_OWNER', "The owner can't change their own role; transfer ownership instead");
       }
     } else {
       await conflictOnRace(() =>
@@ -211,4 +211,4 @@ export class MembersService {
   }
 }
 
-const ownerCantLeave = () => new AppError('CONFLICT', "The owner can't leave the trip; transfer ownership first");
+const ownerCantLeave = () => conflict('LAST_OWNER', "The owner can't leave the trip; transfer ownership first");

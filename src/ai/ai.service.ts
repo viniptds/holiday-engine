@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { EntityManager, In, MoreThanOrEqual, Repository } from 'typeorm';
-import { AppError } from '../app-common/app-error.js';
+import { AppError, conflict } from '../app-common/app-error.js';
 import type { AuthUser } from '../app-common/auth-user.js';
 import type { Locale } from '../app-common/locale.js';
 import { appValidationPipe } from '../app-common/app-validation.pipe.js';
@@ -30,7 +30,7 @@ import { ItineraryService } from './itinerary.service.js';
 import type { NewTripPlace } from './itinerary.service.js';
 
 const conversationNotFound = () => new AppError('NOT_FOUND', 'Conversation not found');
-const notOpen = (status: string) => new AppError('CONFLICT', `This plan is ${status}; start a new one`);
+const notOpen = (status: string) => conflict('CONVERSATION_CLOSED', `This plan is ${status}; start a new one`);
 const aiUnavailable = () =>
   new AppError('AI_UNAVAILABLE', 'The trip planner is unavailable right now. Please try again in a moment.');
 
@@ -179,10 +179,10 @@ export class AiService {
       const last = history.at(-1);
       if (last?.role === 'user' && last.text === message) {
         if (last.replyingUntil && new Date(last.replyingUntil).getTime() > Date.now()) {
-          throw new AppError('CONFLICT', 'A reply is already being prepared');
+          throw conflict('REPLY_IN_PROGRESS', 'A reply is already being prepared');
         }
         if (last.attempts >= MAX_TURN_ATTEMPTS) {
-          throw new AppError('CONFLICT', 'This message failed too many times; send a different message or start a new plan');
+          throw conflict('RETRY_LIMIT', 'This message failed too many times; send a different message or start a new plan');
         }
         await this.checkRateLimit(manager, user.id);
         // The retry is counted at its own time: the row moves to now (it's the latest message anyway).
@@ -193,7 +193,7 @@ export class AiService {
       } else {
         const sent = history.filter((m) => m.role === 'user').length;
         if (sent >= MAX_USER_MESSAGES_PER_CONVERSATION) {
-          throw new AppError('CONFLICT', 'This plan has reached its message limit; start a new plan');
+          throw conflict('PLAN_FULL', 'This plan has reached its message limit; start a new plan');
         }
         await this.checkRateLimit(manager, user.id);
         history.push(
@@ -235,7 +235,7 @@ export class AiService {
     const conversation = await this.requireConversation(user, conversationId);
     if (conversation.status !== 'open') throw notOpen(conversation.status);
     const { affected } = await this.conversations.update({ id: conversation.id, status: 'open' }, { status: 'abandoned' });
-    if (!affected) throw new AppError('CONFLICT', 'This plan is no longer open');
+    if (!affected) throw conflict('CONVERSATION_CLOSED', 'This plan is no longer open');
   }
 
   /**
@@ -258,7 +258,7 @@ export class AiService {
     if (conversation.status !== 'open') throw notOpen(conversation.status);
 
     const draft = (await this.history(conversation.id)).filter((m) => m.role === 'assistant').at(-1)?.draft ?? null;
-    if (!draft?.ready) throw new AppError('CONFLICT', "The plan isn't ready yet: it needs a destination and dates");
+    if (!draft?.ready) throw conflict('DRAFT_NOT_READY', "The plan isn't ready yet: it needs a destination and dates");
     const selected = selectPlaces(draft.places, placeIds);
     let counts = { added: 0, skipped: 0 };
     const accept = async (manager: EntityManager, tripId: string) => {
@@ -318,7 +318,7 @@ export class AiService {
     conversation: AiConversation,
     locale: Locale,
   ): Promise<{ trip: AppTripDto; created: boolean }> {
-    if (!conversation.tripId) throw new AppError('CONFLICT', 'The trip of this plan was deleted');
+    if (!conversation.tripId) throw conflict('CONVERSATION_CLOSED', 'The trip of this plan was deleted');
     return { trip: await this.appTrips.get(user, conversation.tripId, locale), created: false };
   }
 

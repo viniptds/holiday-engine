@@ -315,7 +315,7 @@ describe('Trip places and itinerary (feature)', () => {
       const response = await add(trip.id, { googlePlaceId: 'g-dup' });
 
       expect(response.status).toBe(409);
-      expect(await response.json()).toEqual({ code: 'CONFLICT', message: 'Already in this trip' });
+      expect(await response.json()).toEqual({ code: 'CONFLICT', reason: 'ALREADY_IN_TRIP', message: 'Already in this trip' });
       expect(directory.detailsCalls).toEqual([]);
     });
 
@@ -376,7 +376,7 @@ describe('Trip places and itinerary (feature)', () => {
       const response = await add(trip.id, { googlePlaceId: 'g-201' });
 
       expect(response.status).toBe(409);
-      expect((await response.json()).message).toContain('200');
+      expect(await response.json()).toMatchObject({ code: 'CONFLICT', reason: 'TRIP_PLACES_LIMIT', message: expect.stringContaining('200') });
       expect(db.all(TripPlace)).toHaveLength(200);
       expect(directory.detailsCalls).toEqual([]);
     });
@@ -634,7 +634,7 @@ describe('Trip places and itinerary (feature)', () => {
       const response = await put(trip.id, { itineraryVersion: 3, days: [{ day: 2, placeIds: [a.id, b.id, c.id] }] });
 
       expect(response.status).toBe(409);
-      expect(await response.json()).toMatchObject({ code: 'CONFLICT', fields: { itineraryVersion: '4' } });
+      expect(await response.json()).toMatchObject({ code: 'CONFLICT', reason: 'STALE_ITINERARY', fields: { itineraryVersion: '4' } });
       expect(version(trip.id)).toBe(4);
       expect(order(trip.id)).toEqual([
         ['a', 1, 0],

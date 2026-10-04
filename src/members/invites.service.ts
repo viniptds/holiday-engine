@@ -5,7 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { In, IsNull, MoreThan, Not, Repository } from 'typeorm';
 import type { EntityManager, FindOptionsWhere } from 'typeorm';
-import { AppError } from '../app-common/app-error.js';
+import { AppError, forbidden } from '../app-common/app-error.js';
 import { USER_DIRECTORY } from '../app-common/auth-user.js';
 import type { AuthUser, UserDirectory } from '../app-common/auth-user.js';
 import { TripMember } from '../app-trips/trip-member.entity.js';
@@ -348,16 +348,16 @@ export class InvitesService implements OnApplicationShutdown {
         if (invite.email !== null) {
           // Email invites are only for the account with that email; a mismatch leaves the invite usable.
           if (user.devAccount) {
-            throw new AppError('FORBIDDEN', "Test accounts can't accept email invites; use a link invite");
+            throw forbidden('DEV_ACCOUNT_EMAIL_INVITE', "Test accounts can't accept email invites; use a link invite");
           }
           if (normalizeEmail(invite.email) !== normalizeEmail(user.email)) {
-            throw new AppError('FORBIDDEN', 'This invite is for a different account');
+            throw forbidden('INVITE_OTHER_ACCOUNT', 'This invite is for a different account');
           }
         }
 
         const removal = await manager.findOne(TripRemoval, { where: membership });
         const liftsRemoval = removal && invite.email !== null && new Date(invite.createdAt) > new Date(removal.removedAt);
-        if (removal && !liftsRemoval) throw new AppError('FORBIDDEN', 'You were removed from this trip');
+        if (removal && !liftsRemoval) throw forbidden('REMOVED_FROM_TRIP', 'You were removed from this trip');
 
         if (invite.email !== null) {
           const { affected } = await manager.update(

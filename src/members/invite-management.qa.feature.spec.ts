@@ -237,7 +237,7 @@ describe('Invite management (QA feature)', () => {
       const res = await call('POST', `/invites/${between.token}/accept`, NEWCOMER);
 
       expect(res.status).toBe(403);
-      expect(await res.json()).toEqual({ code: 'FORBIDDEN', message: 'You were removed from this trip' });
+      expect(await res.json()).toEqual({ code: 'FORBIDDEN', reason: 'REMOVED_FROM_TRIP', message: 'You were removed from this trip' });
       // Refused without using it up.
       expect(db.all(TripInvite, { id: between.id })[0].acceptedAt).toBeNull();
     });

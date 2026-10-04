@@ -261,7 +261,7 @@ describe('Members and invites API (feature)', () => {
       const keep = await call('PATCH', `/trips/${id}/members/${OWNER}`, OWNER, { role: 'owner' });
 
       expect(demote.status).toBe(409);
-      expect((await demote.json()).code).toBe('CONFLICT');
+      expect(await demote.json()).toMatchObject({ code: 'CONFLICT', reason: 'LAST_OWNER' });
       expect(keep.status).toBe(200);
       expect(roleOf(id, OWNER)).toBe('owner');
     });
@@ -313,6 +313,7 @@ describe('Members and invites API (feature)', () => {
       if (status === 409) {
         expect(await res.json()).toEqual({
           code: 'CONFLICT',
+          reason: 'LAST_OWNER',
           message: "The owner can't leave the trip; transfer ownership first",
         });
         expect(roleOf(id, OWNER)).toBe('owner');
@@ -325,6 +326,7 @@ describe('Members and invites API (feature)', () => {
       const res = await call('DELETE', `/trips/${id}/members/${OWNER}`, OWNER);
 
       expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({ code: 'CONFLICT', reason: 'LAST_OWNER' });
       expect(roleOf(id, OWNER)).toBe('owner');
     });
 
@@ -886,7 +888,7 @@ describe('Members and invites API (feature)', () => {
       const wrong = await call('POST', `/invites/${token}/accept`, OUTSIDER);
 
       expect(wrong.status).toBe(403);
-      expect(await wrong.json()).toEqual({ code: 'FORBIDDEN', message: 'This invite is for a different account' });
+      expect(await wrong.json()).toEqual({ code: 'FORBIDDEN', reason: 'INVITE_OTHER_ACCOUNT', message: 'This invite is for a different account' });
       expect(roleOf(id, OUTSIDER)).toBeUndefined();
       expect(db.all(TripInvite)[0]).toMatchObject({ acceptedBy: null, acceptedAt: null, revokedAt: null });
       // The preview stays open to anyone, and the right account can still use the invite.
@@ -1314,7 +1316,7 @@ describe('Members and invites API (feature)', () => {
       for (const token of [link, another]) {
         const res = await call('POST', `/invites/${token}/accept`, NEWCOMER);
         expect(res.status).toBe(403);
-        expect(await res.json()).toEqual({ code: 'FORBIDDEN', message: 'You were removed from this trip' });
+        expect(await res.json()).toEqual({ code: 'FORBIDDEN', reason: 'REMOVED_FROM_TRIP', message: 'You were removed from this trip' });
       }
       expect(roleOf(id, NEWCOMER)).toBeUndefined();
       expect(db.all(TripRemoval)).toEqual([{ tripId: id, userId: NEWCOMER, removedBy: OWNER, removedAt: expect.any(Date) }]);
@@ -1523,7 +1525,7 @@ describe('Members and invites API (feature)', () => {
       const res = await call('PATCH', `/trips/${id}/members/${EDITOR}`, OWNER, { role: 'owner' });
 
       expect(res.status).toBe(409);
-      expect(await res.json()).toEqual({ code: 'CONFLICT', message: expect.any(String) });
+      expect(await res.json()).toEqual({ code: 'CONFLICT', reason: 'TRIP_CHANGED', message: expect.any(String) });
       expect(owners(id)).toEqual([OWNER]);
     });
   });
@@ -1536,7 +1538,7 @@ describe('Members and invites API (feature)', () => {
       const res = await call('POST', `/invites/${token}/accept`, DEV_ANA);
 
       expect(res.status).toBe(403);
-      expect(await res.json()).toEqual({ code: 'FORBIDDEN', message: expect.stringContaining('Test accounts') });
+      expect(await res.json()).toEqual({ code: 'FORBIDDEN', reason: 'DEV_ACCOUNT_EMAIL_INVITE', message: expect.stringContaining('Test accounts') });
       expect(roleOf(id, DEV_ANA)).toBeUndefined();
       expect((await call('POST', `/invites/${token}/accept`, ANA)).status).toBe(200);
     });
