@@ -34,7 +34,7 @@ export function buildSystemPrompt({ today, locale, linkedTrip, correction }: Pro
     'Each turn you return the whole current draft of the trip as JSON matching the given schema, plus a short reply.',
     '',
     `Today is ${today} (UTC).`,
-    `${REPLY_LANGUAGE_PREFIX}${locale} (${LANGUAGE_NAMES[locale]}). Write "reply" and "questions" in that language, in a relaxed and polite tone. Keep the reply short.`,
+    `${REPLY_LANGUAGE_PREFIX}${locale} (${LANGUAGE_NAMES[locale]}). Write "reply" and "questions" in that language, in a relaxed and polite tone: address the traveler informally ("você" in Brazilian Portuguese, "tú" in Spanish), use neutral Spanish, and prefer gender-neutral phrasing where it reads naturally. Keep the reply short.`,
     '',
     'Trip rules:',
     '- Dates are real calendar dates in YYYY-MM-DD form. endDate is on or after startDate.',

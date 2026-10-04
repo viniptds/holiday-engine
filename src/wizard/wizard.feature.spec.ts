@@ -87,10 +87,10 @@ describe('GET /app/v1/wizard/questions (feature)', () => {
   // [Accept-Language, pace title, first interests label, budget "treat" label, relaxer persona]
   it.each([
     ['en', "What's your travel pace?", 'Food', 'Treat yourself', 'Easygoing Wanderer'],
-    ['pt-BR', 'Qual é o seu ritmo de viagem?', 'Comida', 'Se dar um mimo', 'Espírito tranquilo'],
-    ['es', '¿Cuál es tu ritmo de viaje?', 'Comida', 'Darte un gusto', 'Espíritu tranquilo'],
-    ['es-AR,es;q=0.9,en;q=0.8', '¿Cuál es tu ritmo de viaje?', 'Comida', 'Darte un gusto', 'Espíritu tranquilo'],
-    ['pt-PT', 'Qual é o seu ritmo de viagem?', 'Comida', 'Se dar um mimo', 'Espírito tranquilo'],
+    ['pt-BR', 'Qual é o seu ritmo de viagem?', 'Comida', 'Me dar um mimo', 'Espírito tranquilo'],
+    ['es', '¿Cuál es tu ritmo de viaje?', 'Comida', 'Darme un gusto', 'Espíritu tranquilo'],
+    ['es-AR,es;q=0.9,en;q=0.8', '¿Cuál es tu ritmo de viaje?', 'Comida', 'Darme un gusto', 'Espíritu tranquilo'],
+    ['pt-PT', 'Qual é o seu ritmo de viagem?', 'Comida', 'Me dar um mimo', 'Espírito tranquilo'],
     ['fr', "What's your travel pace?", 'Food', 'Treat yourself', 'Easygoing Wanderer'],
     ['de-DE,fr;q=0.8', "What's your travel pace?", 'Food', 'Treat yourself', 'Easygoing Wanderer'],
   ])('serves Accept-Language %p in its locale', async (language, paceTitle, food, treat, relaxer) => {
