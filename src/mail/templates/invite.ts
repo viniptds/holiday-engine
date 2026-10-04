@@ -71,9 +71,9 @@ export const INVITE_COPY: Record<Locale, InviteCopy> = {
     anonymousInviter: { inner: 'alguém do Holid.ai', start: 'Alguém do Holid.ai' },
     preheader: (v) => `Vem planejar ${v.destination} com ${v.inviter} no Holid.ai.`,
     heading: (v) => `Partiu ${v.destination}?`,
-    intro: (v) => `${v.inviterStart} está planejando uma viagem para ${v.destination} e quer muito você junto.`,
+    intro: (v) => `${v.inviterStart} está planejando uma viagem para ${v.destination} e adoraria ter você junto.`,
     labels: { destination: 'Destino', dates: 'Datas', access: 'Seu acesso' },
-    access: { editor: 'Pode editar', viewer: 'Pode visualizar' },
+    access: { editor: 'Pode editar', viewer: 'Pode ver' },
     roleLine: {
       editor: 'Você vai poder editar a viagem e ajudar a montar o roteiro.',
       viewer: 'Você vai poder ver o roteiro e acompanhar tudo de perto.',
@@ -84,12 +84,12 @@ export const INVITE_COPY: Record<Locale, InviteCopy> = {
     linkFallback: 'Se o botão não funcionar, copie este link e cole no navegador:',
     expires: (date) => `O convite vale até ${date}.`,
     footer: (v) =>
-      `Você recebeu este e-mail porque ${v.inviter} te convidou para uma viagem no Holid.ai. Não estava esperando? É só ignorar, nada vai acontecer.`,
+      `Você recebeu este e-mail porque ${v.inviter} convidou você para uma viagem no Holid.ai. Não estava esperando? É só ignorar, nada vai acontecer.`,
   },
   es: {
     subject: 'Tienes una invitación para planear un viaje en Holid.ai',
     anonymousInviter: { inner: 'alguien de Holid.ai', start: 'Alguien de Holid.ai' },
-    preheader: (v) => `Organiza ${v.destination} con ${v.inviter} en Holid.ai.`,
+    preheader: (v) => `Planea ${v.destination} con ${v.inviter} en Holid.ai.`,
     heading: (v) => `¿Te sumas al viaje a ${v.destination}?`,
     intro: (v) => `${v.inviterStart} está planeando un viaje a ${v.destination} y le encantaría que vinieras.`,
     labels: { destination: 'Destino', dates: 'Fechas', access: 'Tu acceso' },
