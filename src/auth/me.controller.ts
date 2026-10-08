@@ -10,6 +10,8 @@ import { UpdateProfileDto } from '../users/dto/update-profile.dto.js';
 import { AuthService } from './auth.service.js';
 import { AuthGuard } from './auth.guard.js';
 import { CurrentUser } from './current-user.decorator.js';
+import { RequestTimezone } from '../app-common/timezone.js';
+import { MeExtensions } from '../users/me-extensions.js';
 
 @Controller(`${APP_PREFIX}/me`)
 @UseFilters(AppExceptionFilter)
@@ -19,16 +21,24 @@ export class MeController {
   constructor(
     private readonly users: UsersService,
     private readonly auth: AuthService,
+    private readonly extensions: MeExtensions,
   ) {}
 
+  /** The User plus fields other features register (billing: `plan`, `aiQuota`, `limits`). */
   @Get()
-  async get(@CurrentUser() user: AuthUser): Promise<UserDto> {
-    return toUserDto(await this.users.get(user.id));
+  async get(@CurrentUser() user: AuthUser, @RequestTimezone() timeZone: string): Promise<UserDto & Record<string, unknown>> {
+    const dto = toUserDto(await this.users.get(user.id));
+    return { ...dto, ...(await this.extensions.fields({ user, timeZone, now: new Date() })) };
   }
 
   @Patch()
-  async update(@CurrentUser() user: AuthUser, @Body() body: UpdateProfileDto): Promise<UserDto> {
-    return toUserDto(await this.users.update(user.id, body));
+  async update(
+    @CurrentUser() user: AuthUser,
+    @Body() body: UpdateProfileDto,
+    @RequestTimezone() timeZone: string,
+  ): Promise<UserDto & Record<string, unknown>> {
+    const dto = toUserDto(await this.users.update(user.id, body));
+    return { ...dto, ...(await this.extensions.fields({ user, timeZone, now: new Date() })) };
   }
 
   @Delete()

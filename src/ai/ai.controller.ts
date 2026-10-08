@@ -4,6 +4,7 @@ import type { AuthUser } from '../app-common/auth-user.js';
 import { AppExceptionFilter } from '../app-common/app-exception.filter.js';
 import { appValidationPipe } from '../app-common/app-validation.pipe.js';
 import { RequestLocale } from '../app-common/locale.js';
+import { RequestTimezone } from '../app-common/timezone.js';
 import type { Locale } from '../app-common/locale.js';
 import { AuthGuard } from '../auth/auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
@@ -32,9 +33,10 @@ export class AiConversationsController {
     @RequestLocale() locale: Locale,
     @Body(appValidationPipe) body: StartAiConversationDto,
     @Res({ passthrough: true }) response: StatusResponse,
+    @RequestTimezone() timeZone: string,
   ): Promise<{ conversation: AiConversationDto; turn: AiTurnDto } | { code: string; message: string; conversationId: string }> {
     try {
-      return await this.ai.start(user, locale, body);
+      return await this.ai.start(user, locale, body, timeZone);
     } catch (error) {
       if (!(error instanceof FirstTurnUnavailableError)) throw error;
       response.status(HttpStatus.SERVICE_UNAVAILABLE);
@@ -59,13 +61,15 @@ export class AiConversationsController {
     @RequestLocale() locale: Locale,
     @Param('id') id: string,
     @Body(appValidationPipe) body: PostAiMessageDto,
+    @RequestTimezone() timeZone: string,
   ): Promise<{ turn: AiTurnDto }> {
-    return { turn: await this.ai.post(user, locale, id, body.message) };
+    return { turn: await this.ai.post(user, locale, id, body.message, timeZone) };
   }
 
   /**
    * `201` with the new trip, or `200` with the linked (or already confirmed) trip; either way with
-   * `added` and `skipped` (places) next to the Trip's fields.
+   * `added`, `skipped` (already in the trip, or past the 200 cap) and `skippedForPlan` (past the
+   * trip owner's plan limit) next to the Trip's fields.
    */
   @Post(':id/confirm')
   async confirm(
@@ -74,10 +78,10 @@ export class AiConversationsController {
     @Body(appValidationPipe) body: ConfirmAiConversationDto,
     @Res({ passthrough: true }) response: StatusResponse,
     @RequestLocale() locale: Locale,
-  ): Promise<AppTripDto & { added: number; skipped: number }> {
-    const { trip, created, added, skipped } = await this.ai.confirm(user, id, locale, body.placeIds);
+  ): Promise<AppTripDto & { added: number; skipped: number; skippedForPlan: number }> {
+    const { trip, created, added, skipped, skippedForPlan } = await this.ai.confirm(user, id, locale, body.placeIds);
     response.status(created ? HttpStatus.CREATED : HttpStatus.OK);
-    return { ...trip, added, skipped };
+    return { ...trip, added, skipped, skippedForPlan };
   }
 
   @Post(':id/abandon')

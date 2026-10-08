@@ -13,6 +13,8 @@ import { TripRemoval } from '../members/trip-removal.entity.js';
 import { User } from '../users/user.entity.js';
 import { RefreshToken } from '../auth/refresh-token.entity.js';
 import { AccessTokenService } from '../auth/access-token.service.js';
+import { UserEntitlement } from '../billing/user-entitlement.entity.js';
+import { BillingEvent } from '../billing/billing-event.entity.js';
 import type { InMemoryDb } from './in-memory-db.js';
 
 export const TEST_JWT_SECRET = 'test-jwt-secret-that-is-at-least-32-characters';
@@ -29,7 +31,7 @@ export function appTestingModule(db: InMemoryDb, imports: unknown[], config: Rec
       ...(imports as never[]),
     ],
   });
-  for (const entity of [User, RefreshToken, Trip, TripMember, TripInvite, TripRemoval]) {
+  for (const entity of [User, RefreshToken, Trip, TripMember, TripInvite, TripRemoval, UserEntitlement, BillingEvent]) {
     builder = builder.overrideProvider(getRepositoryToken(entity)).useValue(db.repository(entity as never));
   }
   return builder;

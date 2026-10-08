@@ -12,6 +12,7 @@ import { MockPlacesProvider, MOCK_CENTER } from './places/mock-places.provider.j
 import { PLACES_PROVIDER } from './places/places-provider.js';
 import type { PlaceListSearch, PlaceMatch, PlaceSearch, PlacesDirectory } from './places/places-provider.js';
 import { ItineraryService } from './itinerary.service.js';
+import { UserEntitlement } from '../billing/user-entitlement.entity.js';
 import type { AiConversationDto, AiTurnDto, ItineraryDto, PlaceCategory, PlaceSearchResultDto, TripPlaceDto } from './ai.types.js';
 import type { AppTripDto } from '../app-trips/app-trips.types.js';
 import { AiConversation } from './entities/ai-conversation.entity.js';
@@ -824,10 +825,12 @@ describe('Trip places and itinerary (feature)', () => {
 
     it('skips what would go over the 200-place cap', async () => {
       const trip = seedTrip();
+      // A Plus owner: the plan limit is the 200 cap itself.
+      db.seed(UserEntitlement, { userId: OWNER, entitlement: 'plus', store: 'dev', status: 'active', expiresAt: null });
       const draft = await linkedDraft(trip.id);
       for (let i = 0; i < 199; i += 1) seedPlace(trip.id, null, i);
 
-      expect(await json<Confirmed>(await confirm(draft.conversationId))).toMatchObject({ added: 1, skipped: 2 });
+      expect(await json<Confirmed>(await confirm(draft.conversationId))).toMatchObject({ added: 1, skipped: 2, skippedForPlan: 0 });
       expect(db.all(TripPlace, { tripId: trip.id })).toHaveLength(200);
     });
 

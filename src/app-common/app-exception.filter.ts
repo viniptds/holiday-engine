@@ -24,7 +24,7 @@ function httpExceptionMessage(exception: HttpException): string {
 /** Converts anything thrown by app API code into `{ code, message, fields? }`. Use on app controllers only. */
 export function toAppErrorBody(exception: unknown): { status: number; body: AppErrorBody; headers?: Record<string, string> } {
   if (exception instanceof AppError) {
-    const body: AppErrorBody = { code: exception.code, message: exception.message };
+    const body: AppErrorBody = { ...exception.options.extra, code: exception.code, message: exception.message };
     if (exception.reason) body.reason = exception.reason;
     if (exception.fields) body.fields = exception.fields;
     const { retryAfterSeconds } = exception.options;

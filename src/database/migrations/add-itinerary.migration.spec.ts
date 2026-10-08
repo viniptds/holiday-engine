@@ -14,9 +14,9 @@ async function run(direction: 'up' | 'down'): Promise<string[]> {
 }
 
 describe('AddItinerary1760500000000', () => {
-  it('runs last, after the AI tables it changes', () => {
+  it('runs after the AI tables it changes', () => {
     const names = migrations.map((m) => m.name);
-    expect(names.at(-1)).toBe('AddItinerary1760500000000');
+    expect(names.indexOf('AddItinerary1760500000000')).toBeGreaterThan(names.indexOf('CreateAiTables1760400000000'));
     expect(names.indexOf('CreateAiTables1760400000000')).toBeGreaterThan(-1);
   });
 

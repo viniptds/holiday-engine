@@ -6,6 +6,8 @@ import { TripInvite } from '../members/trip-invite.entity.js';
 import { TripRemoval } from '../members/trip-removal.entity.js';
 import { User } from '../users/user.entity.js';
 import { RefreshToken } from '../auth/refresh-token.entity.js';
+import { UserEntitlement } from '../billing/user-entitlement.entity.js';
+import { BillingEvent } from '../billing/billing-event.entity.js';
 import { InMemoryDb } from './in-memory-db.js';
 
 export function appDb(): InMemoryDb {
@@ -13,9 +15,19 @@ export function appDb(): InMemoryDb {
   return new InMemoryDb()
     .define(User, {
       primary: ['id'],
-      generate: () => ({ id: randomUUID(), createdAt: new Date(), updatedAt: new Date(), deletedAt: null }),
+      generate: () => ({ id: randomUUID(), createdAt: new Date(), updatedAt: new Date(), deletedAt: null, timezone: null }),
       updateDate: 'updatedAt',
       deleteDate: 'deletedAt',
+    })
+    .define(UserEntitlement, {
+      primary: ['id'],
+      unique: [['userId', 'entitlement']],
+      generate: () => ({ id: randomUUID(), createdAt: new Date(), updatedAt: new Date(), productId: null, expiresAt: null, willRenew: null, lastEventId: null }),
+      updateDate: 'updatedAt',
+    })
+    .define(BillingEvent, {
+      primary: ['eventId'],
+      generate: () => ({ processedAt: new Date(), appUserId: null }),
     })
     .define(RefreshToken, {
       primary: ['id'],

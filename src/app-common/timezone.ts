@@ -1,0 +1,89 @@
+import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+import type { AuthUser } from './auth-user.js';
+
+/** The header the app sends on every request with its IANA time zone (e.g. `America/Sao_Paulo`). */
+export const TIMEZONE_HEADER = 'x-timezone';
+export const DEFAULT_TIMEZONE = 'UTC';
+
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+/** A cached formatter giving the local calendar date (and hour) in `zone`; throws for an unknown zone. */
+function formatter(zone: string): Intl.DateTimeFormat {
+  let format = formatters.get(zone);
+  if (!format) {
+    format = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hourCycle: 'h23',
+    });
+    if (formatters.size > 500) formatters.clear();
+    formatters.set(zone, format);
+  }
+  return format;
+}
+
+/** True for an IANA zone `Intl.DateTimeFormat` accepts (short, no control characters). */
+export function isValidTimeZone(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 64 || !/^[A-Za-z0-9_+\-/]+$/.test(value)) return false;
+  try {
+    formatter(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The local calendar date in `zone` at `instant`, as a sortable number YYYYMMDD. */
+function localDate(zone: string, instant: number): number {
+  const parts = formatter(zone).formatToParts(new Date(instant));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)!.value);
+  return get('year') * 10_000 + get('month') * 100 + get('day');
+}
+
+/**
+ * The first instant whose local date in `zone` is on or after `date` (YYYYMMDD). The local date
+ * only moves forward as time does, so a binary search finds it; this is DST-safe, including zones
+ * where a transition skips or repeats local midnight.
+ */
+function startOfLocalDate(zone: string, date: number, around: number): number {
+  let low = around - 36 * 3_600_000;
+  let high = around + 36 * 3_600_000;
+  while (high - low > 1) {
+    const middle = Math.floor((low + high) / 2);
+    if (localDate(zone, middle) >= date) high = middle;
+    else low = middle;
+  }
+  return high;
+}
+
+const nextDate = (date: number) => {
+  const d = new Date(Date.UTC(Math.floor(date / 10_000), (Math.floor(date / 100) % 100) - 1, (date % 100) + 1));
+  return d.getUTCFullYear() * 10_000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
+};
+
+/** Today in `zone` at `now`: [local midnight, next local midnight), as instants. */
+export function localDayBounds(zone: string, now: Date = new Date()): { start: Date; end: Date } {
+  const instant = now.getTime();
+  const today = localDate(zone, instant);
+  return {
+    start: new Date(startOfLocalDate(zone, today, instant)),
+    end: new Date(startOfLocalDate(zone, nextDate(today), instant + 24 * 3_600_000)),
+  };
+}
+
+type RequestWithZone = { headers: Record<string, string | string[] | undefined>; user?: AuthUser };
+
+/** The zone for a request: a valid `X-Timezone`, else the user's stored zone, else UTC. */
+export function requestTimeZone(request: RequestWithZone): string {
+  const header = request.headers[TIMEZONE_HEADER];
+  const value = Array.isArray(header) ? header[0] : header;
+  if (isValidTimeZone(value?.trim())) return value!.trim();
+  return isValidTimeZone(request.user?.timezone) ? request.user!.timezone! : DEFAULT_TIMEZONE;
+}
+
+/** `@RequestTimezone()`: see `requestTimeZone`. */
+export const RequestTimezone = createParamDecorator((_data: unknown, context: ExecutionContext): string =>
+  requestTimeZone(context.switchToHttp().getRequest<RequestWithZone>()),
+);

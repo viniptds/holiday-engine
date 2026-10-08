@@ -11,6 +11,7 @@ import { CreateAiTables1760400000000 } from './1760400000000-create-ai-tables.js
 import { AddAiMessageAttempts1760400100000 } from './1760400100000-add-ai-message-attempts.js';
 import { AddAiMessageReplyingUntil1760400200000 } from './1760400200000-add-ai-message-replying-until.js';
 import { AddItinerary1760500000000 } from './1760500000000-add-itinerary.js';
+import { AddBilling1760600000000 } from './1760600000000-add-billing.js';
 
 // Register every migration here, in order.
 export const migrations = [
@@ -27,4 +28,5 @@ export const migrations = [
   AddAiMessageAttempts1760400100000,
   AddAiMessageReplyingUntil1760400200000,
   AddItinerary1760500000000,
+  AddBilling1760600000000,
 ];

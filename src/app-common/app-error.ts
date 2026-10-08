@@ -8,7 +8,9 @@ export type AppErrorCode =
   | 'NOT_FOUND'
   | 'CONFLICT'
   | 'RATE_LIMITED'
+  | 'PAYMENT_REQUIRED'
   | 'AI_UNAVAILABLE'
+  | 'BILLING_UNAVAILABLE'
   | 'INTERNAL';
 
 export const APP_ERROR_STATUS: Record<AppErrorCode, HttpStatus> = {
@@ -18,7 +20,9 @@ export const APP_ERROR_STATUS: Record<AppErrorCode, HttpStatus> = {
   NOT_FOUND: HttpStatus.NOT_FOUND,
   CONFLICT: HttpStatus.CONFLICT,
   RATE_LIMITED: HttpStatus.TOO_MANY_REQUESTS,
+  PAYMENT_REQUIRED: HttpStatus.PAYMENT_REQUIRED,
   AI_UNAVAILABLE: HttpStatus.SERVICE_UNAVAILABLE,
+  BILLING_UNAVAILABLE: HttpStatus.SERVICE_UNAVAILABLE,
   INTERNAL: HttpStatus.INTERNAL_SERVER_ERROR,
 };
 
@@ -40,10 +44,20 @@ export const CONFLICT_REASONS = [
   'TRIP_CHANGED',
 ] as const;
 export const FORBIDDEN_REASONS = ['REMOVED_FROM_TRIP', 'INVITE_OTHER_ACCOUNT', 'DEV_ACCOUNT_EMAIL_INVITE'] as const;
-export type AppErrorReason = (typeof CONFLICT_REASONS)[number] | (typeof FORBIDDEN_REASONS)[number];
+export const PAYMENT_REQUIRED_REASONS = ['AI_QUOTA_EXCEEDED', 'TRIP_PLACES_PLUS_REQUIRED'] as const;
+export type AppErrorReason =
+  | (typeof CONFLICT_REASONS)[number]
+  | (typeof FORBIDDEN_REASONS)[number]
+  | (typeof PAYMENT_REQUIRED_REASONS)[number];
 
-/** Body of every app API error response. */
-export type AppErrorBody = { code: AppErrorCode; message: string; reason?: AppErrorReason; fields?: Record<string, string> };
+/** Body of every app API error response. Some errors add documented top-level extras (`resetsAt`, `limit`). */
+export type AppErrorBody = {
+  code: AppErrorCode;
+  message: string;
+  reason?: AppErrorReason;
+  fields?: Record<string, string>;
+  [extra: string]: unknown;
+};
 
 /** Extra details for an error. */
 export type AppErrorOptions = {
@@ -51,6 +65,8 @@ export type AppErrorOptions = {
   retryAfterSeconds?: number;
   /** Sent as `reason` in the body. */
   reason?: AppErrorReason;
+  /** Extra top-level body fields the contract documents for this error (e.g. `resetsAt`, `limit`). */
+  extra?: Record<string, string | number>;
 };
 
 /** Throw from app API code; `AppExceptionFilter` turns it into the contract's error response. */
@@ -73,6 +89,13 @@ export class AppError extends Error {
 /** CONFLICT with its contract reason. */
 export const conflict = (reason: (typeof CONFLICT_REASONS)[number], message: string, fields?: Record<string, string>) =>
   new AppError('CONFLICT', message, fields, { reason });
+
+/** PAYMENT_REQUIRED (402) with its contract reason and body extras. */
+export const paymentRequired = (
+  reason: (typeof PAYMENT_REQUIRED_REASONS)[number],
+  message: string,
+  extra: Record<string, string | number>,
+) => new AppError('PAYMENT_REQUIRED', message, undefined, { reason, extra });
 
 /** FORBIDDEN with its contract reason. */
 export const forbidden = (reason: (typeof FORBIDDEN_REASONS)[number], message: string) =>

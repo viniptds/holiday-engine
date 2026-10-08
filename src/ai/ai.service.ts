@@ -28,6 +28,8 @@ import type { LlmHistoryEntry, LlmProvider } from './llm/llm-provider.js';
 import { PlacesVerifier } from './places/places-verifier.js';
 import { ItineraryService } from './itinerary.service.js';
 import { WizardService } from '../wizard/wizard.service.js';
+import { AiQuotaService } from '../billing/ai-quota.service.js';
+import { DEFAULT_TIMEZONE } from '../app-common/timezone.js';
 import type { NewTripPlace } from './itinerary.service.js';
 
 const conversationNotFound = () => new AppError('NOT_FOUND', 'Conversation not found');
@@ -118,6 +120,7 @@ export class AiService {
     private readonly appTrips: AppTripsService,
     private readonly itinerary: ItineraryService,
     private readonly wizard: WizardService,
+    private readonly quota: AiQuotaService,
   ) {}
 
   /** Starts a conversation with its first message. With `tripId`, the caller must be owner or editor. */
@@ -125,12 +128,15 @@ export class AiService {
     user: AuthUser,
     locale: Locale,
     input: { message: string; tripId?: string },
+    timeZone: string = DEFAULT_TIMEZONE,
   ): Promise<{ conversation: AiConversationDto; turn: AiTurnDto }> {
     const linked = input.tripId ? (await this.appTrips.requireMembership(user, input.tripId, ['owner', 'editor'])).trip! : null;
 
     const { conversation, first } = await this.conversations.manager.transaction(async (manager) => {
       await lockUser(manager, user.id);
       await this.checkRateLimit(manager, user.id);
+      // The free daily quota, under the same lock, before anything is stored.
+      await this.quota.enforce(manager, user.id, timeZone);
       const conversation = await manager.save(
         manager.create(AiConversation, {
           userId: user.id,
@@ -170,7 +176,13 @@ export class AiService {
    * after a failed turn (or after the in-flight mark expired) retries it: no second row, but the
    * attempt is counted on the message (and toward the rate limits), at most MAX_TURN_ATTEMPTS in all.
    */
-  async post(user: AuthUser, locale: Locale, conversationId: string, message: string): Promise<AiTurnDto> {
+  async post(
+    user: AuthUser,
+    locale: Locale,
+    conversationId: string,
+    message: string,
+    timeZone: string = DEFAULT_TIMEZONE,
+  ): Promise<AiTurnDto> {
     const conversation = await this.requireConversation(user, conversationId);
     if (conversation.status !== 'open') throw notOpen(conversation.status);
 
@@ -198,6 +210,8 @@ export class AiService {
           throw conflict('PLAN_FULL', 'This plan has reached its message limit; start a new plan');
         }
         await this.checkRateLimit(manager, user.id);
+        // A new message uses free quota; a retry of a failed reply (above) doesn't.
+        await this.quota.enforce(manager, user.id, timeZone);
         history.push(
           await manager.save(
             manager.create(AiMessage, {
@@ -254,15 +268,15 @@ export class AiService {
     conversationId: string,
     locale: Locale,
     placeIds?: string[],
-  ): Promise<{ trip: AppTripDto; created: boolean; added: number; skipped: number }> {
+  ): Promise<{ trip: AppTripDto; created: boolean; added: number; skipped: number; skippedForPlan: number }> {
     const conversation = await this.requireConversation(user, conversationId);
-    if (conversation.status === 'confirmed') return { ...(await this.confirmedTrip(user, conversation, locale)), added: 0, skipped: 0 };
+    if (conversation.status === 'confirmed') return { ...(await this.confirmedTrip(user, conversation, locale)), added: 0, skipped: 0, skippedForPlan: 0 };
     if (conversation.status !== 'open') throw notOpen(conversation.status);
 
     const draft = (await this.history(conversation.id)).filter((m) => m.role === 'assistant').at(-1)?.draft ?? null;
     if (!draft?.ready) throw conflict('DRAFT_NOT_READY', "The plan isn't ready yet: it needs a destination and dates");
     const selected = selectPlaces(draft.places, placeIds);
-    let counts = { added: 0, skipped: 0 };
+    let counts = { added: 0, skipped: 0, skippedForPlan: 0 };
     const accept = async (manager: EntityManager, tripId: string) => {
       await this.claim(manager, conversation.id, tripId);
       counts = await this.itinerary.appendInTransaction(manager, tripId, user.id, selected);
@@ -296,7 +310,7 @@ export class AiService {
     } catch (error) {
       if (!(error instanceof ConfirmRaceError)) throw error;
       const latest = await this.requireConversation(user, conversation.id);
-      if (latest.status === 'confirmed') return { ...(await this.confirmedTrip(user, latest, locale)), added: 0, skipped: 0 };
+      if (latest.status === 'confirmed') return { ...(await this.confirmedTrip(user, latest, locale)), added: 0, skipped: 0, skippedForPlan: 0 };
       throw notOpen(latest.status);
     }
   }

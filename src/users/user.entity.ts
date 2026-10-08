@@ -26,6 +26,10 @@ export class User {
   @Column({ type: 'varchar', length: 100, nullable: true })
   homeCity: string | null;
 
+  /** The latest valid IANA zone the app sent (`X-Timezone`); null until it sends one. */
+  @Column({ type: 'text', nullable: true })
+  timezone: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

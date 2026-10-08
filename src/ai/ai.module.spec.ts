@@ -38,6 +38,9 @@ describe('AiModule startup', () => {
 
   it('fails with mock providers in production', async () => {
     process.env.NODE_ENV = 'production';
-    await expect(aiTestingModule(aiDb()).compile()).rejects.toThrow('AI_PROVIDER=mock is not allowed in production');
+    // Billing must not be mock in production either; set it so the AI check is the one that fails.
+    await expect(
+      aiTestingModule(aiDb(), { BILLING_PROVIDER: 'revenuecat', REVENUECAT_SECRET_API_KEY: 'sk', REVENUECAT_WEBHOOK_AUTH: 'auth' }).compile(),
+    ).rejects.toThrow('AI_PROVIDER=mock is not allowed in production');
   });
 });
