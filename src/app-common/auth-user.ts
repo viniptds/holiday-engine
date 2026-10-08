@@ -10,6 +10,8 @@ export interface AuthUser {
    * satisfies an email-invite match. Always set by `AuthGuard`.
    */
   devAccount?: boolean;
+  /** The IANA zone stored for the user (`users.timezone`), if any. */
+  timezone?: string | null;
 }
 
 /** Public profile of a user, as other features need it (member lists, invites). */

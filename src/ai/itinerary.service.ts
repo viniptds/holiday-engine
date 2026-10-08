@@ -2,7 +2,8 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { EntityManager, Repository } from 'typeorm';
-import { AppError, conflict } from '../app-common/app-error.js';
+import { AppError, conflict, paymentRequired } from '../app-common/app-error.js';
+import { BillingService } from '../billing/billing.service.js';
 import type { AuthUser } from '../app-common/auth-user.js';
 import type { Locale } from '../app-common/locale.js';
 import { AppTripsService } from '../app-trips/app-trips.service.js';
@@ -27,6 +28,8 @@ const placeNotFound = () => new AppError('NOT_FOUND', 'Place not found');
 const tripNotFound = () => new AppError('NOT_FOUND', 'Trip not found');
 const alreadyInTrip = () => conflict('ALREADY_IN_TRIP', 'Already in this trip');
 const tripFull = () => conflict('TRIP_PLACES_LIMIT', `A trip can hold at most ${MAX_TRIP_PLACES} places`);
+const plusRequired = (limit: number) =>
+  paymentRequired('TRIP_PLACES_PLUS_REQUIRED', `The trip owner's plan allows ${limit} places`, { limit });
 const placesUnavailable = () =>
   new AppError('AI_UNAVAILABLE', 'Place search is unavailable right now. Please try again in a moment.');
 const invalid = (fields: Record<string, string>) => new AppError('VALIDATION', 'Some fields are invalid', fields);
@@ -65,6 +68,7 @@ export class ItineraryService {
     @InjectRepository(TripPlace) private readonly places: Repository<TripPlace>,
     @Inject(PLACES_PROVIDER) private readonly provider: PlacesDirectory,
     private readonly appTrips: AppTripsService,
+    private readonly billing: BillingService,
   ) {}
 
   /** The itinerary: places by day (Unplanned last) then position, and its version. */
@@ -123,7 +127,9 @@ export class ItineraryService {
 
   /**
    * Adds a place the user picked: re-fetched from Google (Place Details), within 50 km of the
-   * destination, not already in the trip, at most 200 per trip; appended at the end of its day.
+   * destination, not already in the trip, at most 200 per trip (409) and at most the trip OWNER's
+   * plan limit (402 TRIP_PLACES_PLUS_REQUIRED with `limit`); appended at the end of its day.
+   * A trip already over its plan limit keeps its places; only additions are refused.
    */
   async add(user: AuthUser, tripId: string, data: AddPlaceDto, locale: Locale): Promise<TripPlaceDto> {
     const { trip } = await this.appTrips.requireMembership(user, tripId, ['owner', 'editor']);
@@ -131,6 +137,8 @@ export class ItineraryService {
     const current = await this.places.find({ where: { tripId: trip!.id } });
     if (current.some((p) => p.googlePlaceId === data.googlePlaceId)) throw alreadyInTrip();
     if (current.length >= MAX_TRIP_PLACES) throw tripFull();
+    const planLimit = await this.billing.tripPlacesLimit(trip!.ownerUserId);
+    if (current.length >= planLimit) throw plusRequired(planLimit);
     if (data.day != null && data.day > tripDays(trip!)) throw invalid({ day: `day must be between 1 and ${tripDays(trip!)}` });
 
     let match: PlaceMatch | null;
@@ -151,7 +159,8 @@ export class ItineraryService {
       const locked = await this.lockTrip(manager, trip!.id);
       // The dates may have changed since the first check.
       if (data.day != null && data.day > tripDays(locked)) throw invalid({ day: `day must be between 1 and ${tripDays(locked)}` });
-      const { added, ids } = await this.append(manager, locked, user.id, [
+      const limit = await this.billing.tripPlacesLimit(locked.ownerUserId, manager);
+      const { added, ids, skippedForPlan } = await this.append(manager, locked, user.id, limit, [
         {
           match,
           category: data.category ?? deriveCategory(match.types),
@@ -164,7 +173,8 @@ export class ItineraryService {
       if (added === 0) {
         // Lost a race with another add of the same place, or the trip filled up.
         const count = (await manager.find(TripPlace, { where: { tripId: locked.id } })).length;
-        throw count >= MAX_TRIP_PLACES ? tripFull() : alreadyInTrip();
+        if (count >= MAX_TRIP_PLACES) throw tripFull();
+        throw skippedForPlan > 0 ? plusRequired(limit) : alreadyInTrip();
       }
       return ids[0];
     }).catch((error: unknown) => {
@@ -255,12 +265,19 @@ export class ItineraryService {
 
   /**
    * AI accept: appends the places in the caller's transaction (trip locked here), skipping ones
-   * already in the trip and any beyond the 200-place cap.
+   * already in the trip or beyond the 200-place cap (`skipped`), and any past the trip owner's plan
+   * limit (`skippedForPlan`).
    */
-  async appendInTransaction(manager: EntityManager, tripId: string, userId: string, items: NewTripPlace[]): Promise<{ added: number; skipped: number }> {
+  async appendInTransaction(
+    manager: EntityManager,
+    tripId: string,
+    userId: string,
+    items: NewTripPlace[],
+  ): Promise<{ added: number; skipped: number; skippedForPlan: number }> {
     const locked = await this.lockTrip(manager, tripId);
-    const { added } = await this.append(manager, locked, userId, items);
-    return { added, skipped: items.length - added };
+    const limit = await this.billing.tripPlacesLimit(locked.ownerUserId, manager);
+    const { added, skippedForPlan } = await this.append(manager, locked, userId, limit, items);
+    return { added, skipped: items.length - added - skippedForPlan, skippedForPlan };
   }
 
   /**
@@ -282,16 +299,22 @@ export class ItineraryService {
     manager: EntityManager,
     trip: Trip,
     userId: string,
+    planLimit: number,
     items: NewTripPlace[],
-  ): Promise<{ added: number; ids: string[] }> {
+  ): Promise<{ added: number; ids: string[]; skippedForPlan: number }> {
     const existing = await manager.find(TripPlace, { where: { tripId: trip.id } });
     const seen = new Set(existing.map((p) => p.googlePlaceId));
     const days = tripDays(trip);
     const nextByDay = new Map<number | null, number>();
     let count = existing.length;
     const ids: string[] = [];
+    let skippedForPlan = 0;
     for (const item of items) {
       if (seen.has(item.match.googlePlaceId) || count >= MAX_TRIP_PLACES) continue;
+      if (count >= planLimit) {
+        skippedForPlan += 1;
+        continue;
+      }
       seen.add(item.match.googlePlaceId);
       const day = item.day !== null && item.day >= 1 && item.day <= days ? item.day : null;
       const position = nextByDay.get(day) ?? nextPosition(existing, day);
@@ -318,7 +341,7 @@ export class ItineraryService {
       count += 1;
     }
     if (ids.length > 0) await this.bump(manager, trip);
-    return { added: ids.length, ids };
+    return { added: ids.length, ids, skippedForPlan };
   }
 
   /** The trip row, locked until the transaction ends. */

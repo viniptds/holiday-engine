@@ -96,7 +96,8 @@ describe('AI trip planning API (feature)', () => {
   const logged: string[] = [];
 
   beforeAll(async () => {
-    const moduleRef = await aiTestingModule(db)
+    // A high free quota: these tests are about the planner and fair use, not the daily quota (billing specs cover it).
+    const moduleRef = await aiTestingModule(db, { FREE_AI_MESSAGES_PER_DAY: '1000' })
       .overrideProvider(LLM_PROVIDER)
       .useValue(llm)
       .overrideProvider(PLACES_PROVIDER)

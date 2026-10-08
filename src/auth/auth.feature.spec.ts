@@ -392,7 +392,7 @@ describe('App auth and profile (feature)', () => {
       const res = await call('GET', '/probe', { token: session.accessToken });
 
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ id: session.user.id, email: 'ana@example.com', devAccount: false });
+      expect(await res.json()).toEqual({ id: session.user.id, email: 'ana@example.com', devAccount: false, timezone: null });
     });
 
     it('exposes USER_DIRECTORY to modules importing AuthModule', async () => {

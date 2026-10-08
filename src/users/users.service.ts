@@ -68,6 +68,11 @@ export class UsersService implements UserDirectory {
     return this.users.save(user);
   }
 
+  /** Stores the user's IANA time zone (already validated). */
+  async setTimezone(id: string, timezone: string): Promise<void> {
+    await this.users.update({ id }, { timezone });
+  }
+
   async softDelete(id: string): Promise<void> {
     await this.users.softDelete({ id });
   }
