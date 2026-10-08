@@ -53,7 +53,10 @@ export class MailInviteMailer implements InviteMailer {
       deepLink: invite.deepLink,
       expiresAt: invite.expiresAt,
     });
-    const sending = this.transport.send({ to: invite.email, ...email, tags: ['trip-invite'] }, signal);
+    const sending = this.transport.send(
+      { to: invite.email, ...email, tags: ['trip-invite'], idempotencyKey: `trip-invite/${invite.inviteId}` },
+      signal,
+    );
     // If the provider still answers after the abort (a driver that can't cancel), say so: the
     // caller has already logged this invite as failed.
     sending.then(

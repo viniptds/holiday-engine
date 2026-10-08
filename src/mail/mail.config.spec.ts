@@ -8,10 +8,12 @@ import type { MailTransport } from './mail.types.js';
 import { LogMailTransport } from './drivers/log.driver.js';
 import { SmtpMailTransport } from './drivers/smtp.driver.js';
 import { MailjetMailTransport } from './drivers/mailjet.driver.js';
+import { ResendMailTransport } from './drivers/resend.driver.js';
 
 const reader = (env: Record<string, string>) => (key: string) => env[key];
 const SMTP = { MAIL_FROM: 'trips@holid.ai', SMTP_HOST: 'in-v3.mailjet.com', SMTP_USER: 'key', SMTP_PASS: 'secret-pass' };
 const MAILJET = { MAIL_FROM: 'trips@holid.ai', MAILJET_API_KEY: 'key', MAILJET_API_SECRET: 'secret-api' };
+const RESEND = { MAIL_FROM: 'trips@holid.ai', RESEND_API_KEY: 're_secret_key' };
 
 /** The error `createMailTransport` throws for `env`. */
 function startupError(env: Record<string, string>): string {
@@ -34,6 +36,8 @@ describe('createMailTransport', () => {
     ['smtp', SMTP, SmtpMailTransport],
     ['SMTP', SMTP, SmtpMailTransport],
     ['mailjet', MAILJET, MailjetMailTransport],
+    ['resend', RESEND, ResendMailTransport],
+    ['Resend', RESEND, ResendMailTransport],
   ])('selects the %s driver', (provider, env, type) => {
     const transport = createMailTransport(reader({ ...env, MAIL_PROVIDER: provider }));
 
@@ -42,7 +46,7 @@ describe('createMailTransport', () => {
   });
 
   it('fails on an unknown provider, naming the known ones', () => {
-    expect(startupError({ MAIL_PROVIDER: 'sendgrid-api' })).toBe('Unknown MAIL_PROVIDER "sendgrid-api". Use one of: log, smtp, mailjet.');
+    expect(startupError({ MAIL_PROVIDER: 'sendgrid-api' })).toBe('Unknown MAIL_PROVIDER "sendgrid-api". Use one of: log, smtp, mailjet, resend.');
     expect(startupError({ MAIL_PROVIDER: 'constructor' })).toContain('Unknown MAIL_PROVIDER');
   });
 
@@ -52,6 +56,10 @@ describe('createMailTransport', () => {
     ['smtp', { ...SMTP, MAIL_FROM: '  ' }, ['MAIL_FROM']],
     ['mailjet', {}, ['MAIL_FROM', 'MAILJET_API_KEY', 'MAILJET_API_SECRET']],
     ['mailjet', { MAIL_FROM: 'a@b.c', MAILJET_API_KEY: 'k' }, ['MAILJET_API_SECRET']],
+    ['resend', {}, ['MAIL_FROM', 'RESEND_API_KEY']],
+    ['resend', { MAIL_FROM: 'a@b.c' }, ['RESEND_API_KEY']],
+    ['resend', { RESEND_API_KEY: 're_secret_key' }, ['MAIL_FROM']],
+    ['resend', { MAIL_FROM: 'a@b.c', RESEND_API_KEY: '   ' }, ['RESEND_API_KEY']],
   ])('fails for %s listing the missing keys (%j)', (provider, env, missing) => {
     const message = startupError({ ...env, MAIL_PROVIDER: provider });
 
@@ -68,6 +76,7 @@ describe('createMailTransport', () => {
       log: false,
       smtp: true,
       mailjet: true,
+      resend: true,
     });
   });
 });
@@ -82,6 +91,24 @@ describe('MailModule', () => {
     const moduleRef = await boot({ MAIL_PROVIDER: 'mailjet', ...MAILJET });
 
     expect(moduleRef.get(MAIL_TRANSPORT)).toBeInstanceOf(MailjetMailTransport);
+  });
+
+  it('provides the Resend transport without calling Resend at startup', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch');
+    try {
+      const moduleRef = await boot({ MAIL_PROVIDER: 'resend', ...RESEND, MAIL_VERIFY_ON_BOOT: 'true' });
+
+      expect(moduleRef.get(MAIL_TRANSPORT)).toBeInstanceOf(ResendMailTransport);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('fails startup naming RESEND_API_KEY, never a value', async () => {
+    const error = (await boot({ MAIL_PROVIDER: 'resend', MAIL_FROM: 'trips@holid.ai' }).catch((e: Error) => e)) as Error;
+
+    expect(error.message).toBe('MAIL_PROVIDER=resend needs these settings, which are missing or empty: RESEND_API_KEY. See .env.example.');
   });
 
   it('fails startup when the provider lacks its settings', async () => {
