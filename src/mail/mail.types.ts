@@ -8,6 +8,11 @@ export type MailMessage = {
   replyTo?: string;
   /** Labels for the provider's analytics, where it supports them (e.g. `trip-invite`). */
   tags?: string[];
+  /**
+   * A stable key for this email (e.g. `trip-invite/<invite id>`), so a retried send can't deliver it
+   * twice where the provider supports it (Resend's `Idempotency-Key`). Never put secrets in it.
+   */
+  idempotencyKey?: string;
 };
 
 /** Sends email through one provider. Pick it with MAIL_PROVIDER; inject it with `MAIL_TRANSPORT`. */

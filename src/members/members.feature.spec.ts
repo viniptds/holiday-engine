@@ -17,6 +17,7 @@ import { MembersService } from './members.service.js';
 import { EMAIL_INVITE_LIMITS, InvitesService, hashToken } from './invites.service.js';
 import { MailInviteMailer } from './invite-mailer.js';
 import { MAIL_TRANSPORT } from '../mail/mail.types.js';
+import { ResendMailTransport } from '../mail/drivers/resend.driver.js';
 import type { MailMessage, MailTransport } from '../mail/mail.types.js';
 import type { InviteDto, InviteSummaryDto, MemberDto } from './members.types.js';
 
@@ -488,6 +489,7 @@ describe('Members and invites API (feature)', () => {
         to: 'ana@example.com',
         subject: 'Tienes una invitación para planear un viaje en Holid.ai',
         tags: ['trip-invite'],
+        idempotencyKey: `trip-invite/${invite.id}`,
       });
       expect(message.text).toContain('Traveler 1111 está planeando un viaje a Lisbon');
       expect(message.text).toContain('Abrir invitación');
@@ -556,6 +558,32 @@ describe('Members and invites API (feature)', () => {
         expect(logs).not.toContain('invitee@example.com');
         expect(logs).not.toContain('holidai://');
         expect(logs).not.toContain('https://holid.example');
+        providerSend.mockRestore();
+      });
+
+      it('when Resend refuses it (the real driver, mocked fetch): no API key, recipient or link', async () => {
+        const id = seedTrip();
+        const apiKey = 're_test_secret_key_123';
+        const fetchFn = jest.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+          const body = JSON.parse(String(init?.body)) as { to: string[]; text: string };
+          const message = `You can only send testing emails to your own email address. To send to ${body.to[0]} with ${apiKey}, verify a domain at https://resend.com/domains. ${body.text}`;
+          return new Response(JSON.stringify({ statusCode: 403, name: 'validation_error', message }), { status: 403 });
+        });
+        const resend = new ResendMailTransport(apiKey, { from: 'trips@holid.ai', fromName: 'Holid.ai' }, fetchFn as typeof fetch);
+        const providerSend = jest.spyOn(transport, 'send').mockImplementationOnce((message, signal) => resend.send(message, signal));
+
+        const { res, logs } = await captureLogs(async () => {
+          const response = await call('POST', `/trips/${id}/invites`, OWNER, { email: 'invitee@example.com' });
+          await invitesService.whenEmailsSettled();
+          return response;
+        });
+
+        const invite = (await res.json()) as InviteDto;
+        const token = invite.url.split('/').pop()!;
+        expect(res.status).toBe(201);
+        expect((fetchFn.mock.calls[0][1]?.headers as Record<string, string>)['idempotency-key']).toBe(`trip-invite/${invite.id}`);
+        expect(logs).toContain(`Sending invite ${invite.id} failed: Resend send failed with HTTP 403 (validation_error)`);
+        for (const secret of [apiKey, token, 'invitee@example.com', 'holidai://', 'https://']) expect(logs).not.toContain(secret);
         providerSend.mockRestore();
       });
     });

@@ -2,12 +2,14 @@ import type { MailDriver, MailSender, MailTransport, SettingReader } from './mai
 import { logDriver } from './drivers/log.driver.js';
 import { smtpDriver } from './drivers/smtp.driver.js';
 import { mailjetDriver } from './drivers/mailjet.driver.js';
+import { resendDriver } from './drivers/resend.driver.js';
 
 /** Every provider MAIL_PROVIDER can name. Add a provider: a driver file + one entry here. */
 export const MAIL_DRIVERS: Record<string, MailDriver> = {
   log: logDriver,
   smtp: smtpDriver,
   mailjet: mailjetDriver,
+  resend: resendDriver,
 };
 
 export const DEFAULT_MAIL_PROVIDER = 'log';
