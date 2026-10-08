@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { EntityManager, Repository } from 'typeorm';
@@ -7,6 +7,7 @@ import { BillingService } from '../billing/billing.service.js';
 import type { AuthUser } from '../app-common/auth-user.js';
 import type { Locale } from '../app-common/locale.js';
 import { AppTripsService } from '../app-trips/app-trips.service.js';
+import { TripActivity } from '../app-trips/trip-activity.js';
 import { Trip } from '../trips/trip.entity.js';
 import { daysBetween } from '../trips/dto/date-rules.js';
 import { MAX_SEARCH_RESULTS, MAX_TRIP_PLACES, SEARCH_RATE_LIMIT } from './ai.types.js';
@@ -69,6 +70,7 @@ export class ItineraryService {
     @Inject(PLACES_PROVIDER) private readonly provider: PlacesDirectory,
     private readonly appTrips: AppTripsService,
     private readonly billing: BillingService,
+    @Optional() private readonly activity?: TripActivity,
   ) {}
 
   /** The itinerary: places by day (Unplanned last) then position, and its version. */
@@ -182,6 +184,7 @@ export class ItineraryService {
       throw error;
     });
     const place = await this.places.findOne({ where: { id } });
+    await this.activity?.emit({ type: 'trip.itinerary', tripId: trip!.id, userId: user.id });
     return toTripPlaceDto(place!);
   }
 
@@ -218,6 +221,7 @@ export class ItineraryService {
       await this.renumber(manager, sameDay);
       await this.bump(manager, locked);
     });
+    await this.activity?.emit({ type: 'trip.itinerary', tripId: trip!.id, userId: user.id });
   }
 
   /**
@@ -226,7 +230,7 @@ export class ItineraryService {
    */
   async putItinerary(user: AuthUser, tripId: string, data: PutItineraryDto): Promise<ItineraryDto> {
     const { trip } = await this.appTrips.requireMembership(user, tripId, ['owner', 'editor']);
-    return this.places.manager.transaction(async (manager) => {
+    const result = await this.places.manager.transaction(async (manager) => {
       const locked = await this.lockTrip(manager, trip!.id);
       const version = locked.itineraryVersion ?? 0;
       if (data.itineraryVersion !== version) {
@@ -261,6 +265,8 @@ export class ItineraryService {
       const rows = await manager.find(TripPlace, { where: { tripId: locked.id } });
       return { places: rows.sort(compareTripPlaces).map(toTripPlaceDto), itineraryVersion };
     });
+    await this.activity?.emit({ type: 'trip.itinerary', tripId: trip!.id, userId: user.id });
+    return result;
   }
 
   /**

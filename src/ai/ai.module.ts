@@ -2,6 +2,7 @@ import { Inject, Logger, Module, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Trip } from '../trips/trip.entity.js';
+import { TripMember } from '../app-trips/trip-member.entity.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { AppTripsModule } from '../app-trips/app-trips.module.js';
 import { WizardModule } from '../wizard/wizard.module.js';
@@ -10,7 +11,7 @@ import { UserDeletionHooks } from '../users/user-deletion-hooks.js';
 import { AI_CONFIG, aiConfigFrom } from './ai.config.js';
 import type { AiConfig } from './ai.config.js';
 import { AiService } from './ai.service.js';
-import { AiConversationsController, TripItineraryController, TripPlacesController } from './ai.controller.js';
+import { AiConversationsController, TripAiConversationsController, TripItineraryController, TripPlacesController } from './ai.controller.js';
 import { ItineraryService } from './itinerary.service.js';
 import { TripScheduleHooks } from '../app-trips/trip-schedule-hooks.js';
 import { AiConversation } from './entities/ai-conversation.entity.js';
@@ -62,8 +63,8 @@ export function createPlacesProvider(config: AiConfig): PlacesDirectory {
  * fails on bad AI settings (`readAiConfig`).
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([AiConversation, AiMessage, TripPlace, Trip]), AuthModule, AppTripsModule, WizardModule, BillingModule],
-  controllers: [AiConversationsController, TripPlacesController, TripItineraryController],
+  imports: [TypeOrmModule.forFeature([AiConversation, AiMessage, TripPlace, Trip, TripMember]), AuthModule, AppTripsModule, WizardModule, BillingModule],
+  controllers: [AiConversationsController, TripAiConversationsController, TripPlacesController, TripItineraryController],
   providers: [
     { provide: AI_CONFIG, inject: [ConfigService], useFactory: aiConfigFrom },
     { provide: LLM_PROVIDER, inject: [AI_CONFIG], useFactory: createLlmProvider },
@@ -72,7 +73,7 @@ export function createPlacesProvider(config: AiConfig): PlacesDirectory {
     ItineraryService,
     AiService,
   ],
-  exports: [AiService],
+  exports: [AiService, AI_CONFIG, PLACES_PROVIDER, ItineraryService],
 })
 export class AiModule implements OnModuleInit {
   private readonly logger = new Logger(AiModule.name);

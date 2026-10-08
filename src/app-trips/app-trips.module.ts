@@ -7,12 +7,13 @@ import { TripMember } from './trip-member.entity.js';
 import { AppTripsController } from './app-trips.controller.js';
 import { AppTripsService } from './app-trips.service.js';
 import { TripScheduleHooks } from './trip-schedule-hooks.js';
+import { TripActivity } from './trip-activity.js';
 
 /** App trips. `AuthModule` provides `AuthGuard` and (through `UsersModule`) `USER_DIRECTORY`. */
 @Module({
   imports: [TypeOrmModule.forFeature([Trip, TripMember]), AuthModule, WizardModule],
   controllers: [AppTripsController],
-  providers: [AppTripsService, TripScheduleHooks],
-  exports: [AppTripsService, TripScheduleHooks],
+  providers: [AppTripsService, TripScheduleHooks, TripActivity],
+  exports: [AppTripsService, TripScheduleHooks, TripActivity],
 })
 export class AppTripsModule {}

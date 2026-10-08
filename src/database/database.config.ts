@@ -12,6 +12,8 @@ import { AiMessage } from '../ai/entities/ai-message.entity.js';
 import { TripPlace } from '../ai/entities/trip-place.entity.js';
 import { UserEntitlement } from '../billing/user-entitlement.entity.js';
 import { BillingEvent } from '../billing/billing-event.entity.js';
+import { Moment } from '../moments/moment.entity.js';
+import { UserAchievement } from '../achievements/user-achievement.entity.js';
 import { migrations } from './migrations/index.js';
 
 const isTrue = (value: string | undefined): boolean => value?.toLowerCase() === 'true';
@@ -28,7 +30,7 @@ export function databaseConfig(config: ConfigService): TypeOrmModuleOptions {
     database: config.get<string>('PGDATABASE'),
     ssl: isTrue(config.get<string>('PGSSL')) ? { rejectUnauthorized: false } : false,
     uuidExtension: 'pgcrypto',
-    entities: [Trip, SuggestedEvent, User, RefreshToken, TripMember, TripInvite, TripRemoval, AiConversation, AiMessage, TripPlace, UserEntitlement, BillingEvent],
+    entities: [Trip, SuggestedEvent, User, RefreshToken, TripMember, TripInvite, TripRemoval, AiConversation, AiMessage, TripPlace, UserEntitlement, BillingEvent, Moment, UserAchievement],
     migrations,
     migrationsRun: true,
     synchronize: isTrue(config.get<string>('DB_SYNCHRONIZE')),

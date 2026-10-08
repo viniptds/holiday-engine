@@ -305,14 +305,18 @@ describe('AI trip planning API (feature)', () => {
       expect(db.all(AiConversation)[0].status).toBe('open');
     });
 
-    it('hides a trip-linked conversation from the other members of that trip', async () => {
+    it("shows a trip-linked conversation to the trip's other members read-only, but not in their own list", async () => {
       const trip = seedTrip([
         [AUTHOR, 'owner'],
         [EDITOR, 'editor'],
       ]);
       const { body } = await start('Add some food places', AUTHOR, { tripId: trip.id });
 
-      expect((await call('GET', `/ai/conversations/${body.conversation.id}`, EDITOR)).status).toBe(404);
+      const read = await call('GET', `/ai/conversations/${body.conversation.id}`, EDITOR);
+      expect(read.status).toBe(200);
+      expect(await read.json()).toMatchObject({ conversation: { id: body.conversation.id }, readOnly: true });
+      const own = await call('GET', `/ai/conversations/${body.conversation.id}`, AUTHOR);
+      expect(await own.json()).toMatchObject({ readOnly: false });
       const list = (await (await call('GET', '/ai/conversations', EDITOR)).json()) as { conversations: unknown[] };
       expect(list.conversations).toEqual([]);
     });

@@ -10,6 +10,7 @@ import { Trip } from '../trips/trip.entity.js';
 import { daysBetween, MAX_TRIP_DAYS } from '../trips/dto/date-rules.js';
 import { TripMember } from './trip-member.entity.js';
 import { TripScheduleHooks } from './trip-schedule-hooks.js';
+import { TripActivity } from './trip-activity.js';
 import { AppTripDto, TravelerProfile, TripRole } from './app-trips.types.js';
 import { WizardService } from '../wizard/wizard.service.js';
 import { CreateAppTripDto } from './dto/create-app-trip.dto.js';
@@ -32,6 +33,7 @@ export class AppTripsService {
     @Inject(USER_DIRECTORY) private readonly users: UserDirectory,
     private readonly wizard: WizardService,
     @Optional() private readonly scheduleHooks?: TripScheduleHooks,
+    @Optional() private readonly activity?: TripActivity,
   ) {}
 
   /** Trips the user is a member of, by startDate ascending. */
@@ -77,6 +79,7 @@ export class AppTripsService {
       await inTransaction?.(manager, trip);
       return member;
     });
+    await this.activity?.emit({ type: 'trip.saved', tripId: membership.tripId, userId: user.id });
     const [dto] = await this.present([membership], locale);
     return dto;
   }
@@ -91,7 +94,12 @@ export class AppTripsService {
     const membership = await this.requireMembership(user, tripId, ['owner', 'editor']);
     const trip = membership.trip!;
     const before = { startDate: trip.startDate, endDate: trip.endDate };
-    if (data.destination !== undefined) trip.destination = data.destination;
+    if (data.destination !== undefined && data.destination !== trip.destination) {
+      trip.destination = data.destination;
+      // A new destination is resolved again (country and city, for the explorer achievements).
+      trip.countryCode = null;
+      trip.cityPlaceId = null;
+    }
     if (data.startDate !== undefined) trip.startDate = data.startDate;
     if (data.endDate !== undefined) trip.endDate = data.endDate;
     if (data.notes !== undefined) trip.notes = data.notes;
@@ -130,6 +138,7 @@ export class AppTripsService {
     } else {
       membership.trip = await this.trips.save(trip);
     }
+    await this.activity?.emit({ type: 'trip.saved', tripId: trip.id, userId: user.id });
     const [dto] = await this.present([membership], locale);
     return dto;
   }

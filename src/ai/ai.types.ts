@@ -1,5 +1,5 @@
 /** App API types for AI trip planning (`docs/app-ai-spec.md`). */
-import type { PartyType } from '../app-trips/app-trips.types.js';
+import type { PartyType, TripRole } from '../app-trips/app-trips.types.js';
 
 export const CONVERSATION_STATUSES = ['open', 'confirmed', 'abandoned'] as const;
 export type ConversationStatus = (typeof CONVERSATION_STATUSES)[number];
@@ -74,6 +74,12 @@ export type AiConversationDto = {
   title: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+/** A trip's linked conversation in `GET /trips/:id/ai/conversations`. `role` is null for an author who left the trip. */
+export type TripAiConversationDto = AiConversationDto & {
+  author: { userId: string; displayName: string; avatarUrl: string | null; role: TripRole | null };
+  readOnly: boolean;
 };
 
 export type AiTurnDto = { id: string; role: MessageRole; text: string; draft: TripDraft | null; createdAt: string };
