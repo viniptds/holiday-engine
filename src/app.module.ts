@@ -16,6 +16,9 @@ import { MembersModule } from './members/members.module.js';
 import { AiModule } from './ai/ai.module.js';
 import { BillingModule } from './billing/billing.module.js';
 import { devBillingModule } from './billing/dev-billing.module.js';
+import { MediaModule } from './media/media.module.js';
+import { MomentsModule } from './moments/moments.module.js';
+import { AchievementsModule } from './achievements/achievements.module.js';
 import { databaseConfig } from './database/database.config.js';
 
 @Module({
@@ -49,6 +52,9 @@ import { databaseConfig } from './database/database.config.js';
     BillingModule,
     // DEV ONLY: POST /app/v1/subscription/dev-grant, under the dev-login rules.
     devBillingModule(),
+    MediaModule,
+    MomentsModule,
+    AchievementsModule,
   ],
   controllers: [AppController],
 })

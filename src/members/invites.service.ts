@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { Inject, Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnApplicationShutdown, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
@@ -11,6 +11,7 @@ import type { AuthUser, UserDirectory } from '../app-common/auth-user.js';
 import { TripMember } from '../app-trips/trip-member.entity.js';
 import { toMemberSummary } from '../app-trips/app-trip.mapper.js';
 import { AppTripsService } from '../app-trips/app-trips.service.js';
+import { TripActivity } from '../app-trips/trip-activity.js';
 import type { AppTripDto } from '../app-trips/app-trips.types.js';
 import { TripInvite } from './trip-invite.entity.js';
 import { TripRemoval } from './trip-removal.entity.js';
@@ -90,6 +91,7 @@ export class InvitesService implements OnApplicationShutdown {
     @Inject(USER_DIRECTORY) private readonly users: UserDirectory,
     @Inject(INVITE_MAILER) private readonly mailer: InviteMailer,
     config: ConfigService,
+    @Optional() private readonly activity?: TripActivity,
   ) {
     this.baseUrl = (config.get<string>('APP_INVITE_BASE_URL') || DEFAULT_INVITE_BASE_URL).replace(/\/+$/, '');
   }
@@ -380,6 +382,7 @@ export class InvitesService implements OnApplicationShutdown {
       // A concurrent accept by the same user added the membership first.
       tripId = (await this.findAny(token)).tripId;
     }
+    await this.activity?.emit({ type: 'member.joined', tripId, userId: user.id });
     return this.appTrips.get(user, tripId, locale);
   }
 

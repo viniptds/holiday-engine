@@ -75,6 +75,16 @@ export class Trip {
   @Column({ type: 'int', default: 0 })
   itineraryVersion: number;
 
+  /**
+   * App trips: the destination's ISO 3166-1 alpha-2 country and its Google place id, set when the
+   * destination is first resolved (or lazily later); null until then and after a destination change.
+   */
+  @Column({ type: 'varchar', length: 2, nullable: true })
+  countryCode: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  cityPlaceId: string | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 

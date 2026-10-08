@@ -2,3 +2,6 @@ node_modules
 dist
 *.tsbuildinfo
 .env
+
+# Moments photos (STORAGE_DRIVER=local, dev only)
+/storage/

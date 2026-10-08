@@ -33,8 +33,11 @@ export type TableSpec = {
   updateDate?: string;
   /** Soft-delete column, like `@DeleteDateColumn`: rows with it set are hidden from reads. */
   deleteDate?: string;
-  /** Many-to-one relations: property -> (target entity, local column holding the target's `id`). */
-  relations?: Record<string, { entity: EntityClass; column: string }>;
+  /**
+   * Many-to-one relations: property -> (target entity, local column holding the target's `id`).
+   * Deleting the target cascades, or with `onDelete: 'SET NULL'` clears the column.
+   */
+  relations?: Record<string, { entity: EntityClass; column: string; onDelete?: 'CASCADE' | 'SET NULL' }>;
 };
 
 type Table = { entity: EntityClass; spec: TableSpec; rows: Row[] };
@@ -444,7 +447,13 @@ export class InMemoryDb {
       for (const relation of Object.values(child.spec.relations ?? {})) {
         if (relation.entity !== table.entity) continue;
         for (const dependent of child.rows.filter((r) => same(r[relation.column], row.id))) {
-          this.deleteRow(child, dependent, undo);
+          if (relation.onDelete === 'SET NULL') {
+            const before = dependent[relation.column];
+            dependent[relation.column] = null;
+            undo?.push(() => (dependent[relation.column] = before));
+          } else {
+            this.deleteRow(child, dependent, undo);
+          }
         }
       }
     }

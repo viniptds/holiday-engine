@@ -10,7 +10,7 @@ import { AuthGuard } from '../auth/auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import type { AppTripDto } from '../app-trips/app-trips.types.js';
 import { AiService, FirstTurnUnavailableError } from './ai.service.js';
-import type { AiConversationDto, AiTurnDto, ItineraryDto, PlaceSearchResultDto, TripPlaceDto } from './ai.types.js';
+import type { AiConversationDto, AiTurnDto, ItineraryDto, PlaceSearchResultDto, TripAiConversationDto, TripPlaceDto } from './ai.types.js';
 import { ItineraryService } from './itinerary.service.js';
 import { AddPlaceDto, PatchPlaceDto, PutItineraryDto, SearchPlacesQueryDto } from './dto/places.dto.js';
 import { ConfirmAiConversationDto, PostAiMessageDto, StartAiConversationDto } from './dto/ai-message.dto.js';
@@ -18,7 +18,10 @@ import { ConfirmAiConversationDto, PostAiMessageDto, StartAiConversationDto } fr
 // Minimal shape of the Express response (no @types/express in this project).
 type StatusResponse = { status(code: number): unknown };
 
-/** AI trip planning (`docs/app-ai-spec.md`). Conversations are visible to their author only. */
+/**
+ * AI trip planning (`docs/app-ai-spec.md`). A conversation linked to a trip is readable by that
+ * trip's members (read-only); only its author can post, confirm or abandon. Unlinked ones are private.
+ */
 @Controller(`${APP_PREFIX}/ai/conversations`)
 @UseFilters(AppExceptionFilter)
 @UseGuards(AuthGuard)
@@ -50,7 +53,10 @@ export class AiConversationsController {
   }
 
   @Get(':id')
-  get(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<{ conversation: AiConversationDto; turns: AiTurnDto[] }> {
+  get(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+  ): Promise<{ conversation: AiConversationDto; turns: AiTurnDto[]; readOnly: boolean }> {
     return this.ai.get(user, id);
   }
 
@@ -88,6 +94,19 @@ export class AiConversationsController {
   @HttpCode(HttpStatus.NO_CONTENT)
   async abandon(@CurrentUser() user: AuthUser, @Param('id') id: string): Promise<void> {
     await this.ai.abandon(user, id);
+  }
+}
+
+/** `GET /trips/:id/ai/conversations` (members): the trip's linked conversations from every author. */
+@Controller(`${APP_PREFIX}/trips/:tripId/ai/conversations`)
+@UseFilters(AppExceptionFilter)
+@UseGuards(AuthGuard)
+export class TripAiConversationsController {
+  constructor(private readonly ai: AiService) {}
+
+  @Get()
+  async list(@CurrentUser() user: AuthUser, @Param('tripId') tripId: string): Promise<{ conversations: TripAiConversationDto[] }> {
+    return { conversations: await this.ai.listForTrip(user, tripId) };
   }
 }
 

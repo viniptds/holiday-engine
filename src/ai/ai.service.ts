@@ -1,12 +1,15 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { EntityManager, In, MoreThanOrEqual, Repository } from 'typeorm';
-import { AppError, conflict } from '../app-common/app-error.js';
-import type { AuthUser } from '../app-common/auth-user.js';
+import { AppError, conflict, forbidden } from '../app-common/app-error.js';
+import { USER_DIRECTORY } from '../app-common/auth-user.js';
+import type { AuthUser, UserDirectory } from '../app-common/auth-user.js';
 import type { Locale } from '../app-common/locale.js';
 import { appValidationPipe } from '../app-common/app-validation.pipe.js';
 import { AppTripsService } from '../app-trips/app-trips.service.js';
+import { TripActivity } from '../app-trips/trip-activity.js';
+import { TripMember } from '../app-trips/trip-member.entity.js';
 import type { AppTripDto } from '../app-trips/app-trips.types.js';
 import { CreateAppTripDto } from '../app-trips/dto/create-app-trip.dto.js';
 import { Trip } from '../trips/trip.entity.js';
@@ -14,7 +17,7 @@ import { daysBetween } from '../trips/dto/date-rules.js';
 import { AI_CONFIG } from './ai.config.js';
 import type { AiConfig } from './ai.config.js';
 import { MAX_LISTED_CONVERSATIONS, MAX_USER_MESSAGES_PER_CONVERSATION, RATE_LIMITS } from './ai.types.js';
-import type { AiConversationDto, AiTurnDto, DraftPlace, TripDraft } from './ai.types.js';
+import type { AiConversationDto, AiTurnDto, DraftPlace, TripAiConversationDto, TripDraft } from './ai.types.js';
 import { toConversationDto, toTurnDto } from './ai.mapper.js';
 import { MODEL_DRAFT_SCHEMA, normalizeDraft, parseModelDraft, replayText } from './draft.js';
 import type { ModelDraft } from './draft.js';
@@ -33,6 +36,7 @@ import { DEFAULT_TIMEZONE } from '../app-common/timezone.js';
 import type { NewTripPlace } from './itinerary.service.js';
 
 const conversationNotFound = () => new AppError('NOT_FOUND', 'Conversation not found');
+const notAuthor = () => forbidden('NOT_CONVERSATION_AUTHOR', 'Only the person who started this plan can continue it');
 const notOpen = (status: string) => conflict('CONVERSATION_CLOSED', `This plan is ${status}; start a new one`);
 const aiUnavailable = () =>
   new AppError('AI_UNAVAILABLE', 'The trip planner is unavailable right now. Please try again in a moment.');
@@ -121,6 +125,9 @@ export class AiService {
     private readonly itinerary: ItineraryService,
     private readonly wizard: WizardService,
     private readonly quota: AiQuotaService,
+    @InjectRepository(TripMember) private readonly tripMembers: Repository<TripMember>,
+    @Inject(USER_DIRECTORY) private readonly users: UserDirectory,
+    @Optional() private readonly activity?: TripActivity,
   ) {}
 
   /** Starts a conversation with its first message. With `tripId`, the caller must be owner or editor. */
@@ -183,7 +190,7 @@ export class AiService {
     message: string,
     timeZone: string = DEFAULT_TIMEZONE,
   ): Promise<AiTurnDto> {
-    const conversation = await this.requireConversation(user, conversationId);
+    const conversation = await this.requireAuthor(user, conversationId);
     if (conversation.status !== 'open') throw notOpen(conversation.status);
 
     // The checks and the write run under the user's lock, so concurrent sends are counted one by one.
@@ -242,13 +249,52 @@ export class AiService {
     return rows.map(toConversationDto);
   }
 
-  async get(user: AuthUser, conversationId: string): Promise<{ conversation: AiConversationDto; turns: AiTurnDto[] }> {
-    const conversation = await this.requireConversation(user, conversationId);
-    return { conversation: toConversationDto(conversation), turns: (await this.history(conversation.id)).map(toTurnDto) };
+  /**
+   * The author's own conversation, or (read-only) one linked to a trip the caller is a member of.
+   * `readOnly` is true for everyone but the author.
+   */
+  async get(
+    user: AuthUser,
+    conversationId: string,
+  ): Promise<{ conversation: AiConversationDto; turns: AiTurnDto[]; readOnly: boolean }> {
+    const { conversation, readOnly } = await this.requireReadable(user, conversationId);
+    return {
+      conversation: toConversationDto(conversation),
+      turns: (await this.history(conversation.id)).map(toTurnDto),
+      readOnly,
+    };
+  }
+
+  /**
+   * `GET /trips/:id/ai/conversations` (members): the trip's linked conversations from every author,
+   * newest first, each with its author and whether it's read-only for the caller.
+   */
+  async listForTrip(user: AuthUser, tripId: string): Promise<TripAiConversationDto[]> {
+    const { trip } = await this.appTrips.requireMembership(user, tripId);
+    const rows = await this.conversations.find({
+      where: { tripId: trip!.id },
+      order: { createdAt: 'DESC' },
+      take: MAX_LISTED_CONVERSATIONS,
+    });
+    const authorIds = [...new Set(rows.map((c) => c.userId))];
+    const [profiles, members] = await Promise.all([
+      this.users.getProfiles(authorIds),
+      this.tripMembers.find({ where: { tripId: trip!.id, userId: In(authorIds) } }),
+    ]);
+    const roles = new Map(members.map((m) => [m.userId, m.role]));
+    return rows.map((c) => {
+      const profile = profiles.get(c.userId);
+      return {
+        ...toConversationDto(c),
+        // An author who left the trip keeps their conversations there, with no role.
+        author: { userId: c.userId, displayName: profile?.displayName ?? 'Traveler', avatarUrl: profile?.avatarUrl ?? null, role: roles.get(c.userId) ?? null },
+        readOnly: c.userId !== user.id,
+      };
+    });
   }
 
   async abandon(user: AuthUser, conversationId: string): Promise<void> {
-    const conversation = await this.requireConversation(user, conversationId);
+    const conversation = await this.requireAuthor(user, conversationId);
     if (conversation.status !== 'open') throw notOpen(conversation.status);
     const { affected } = await this.conversations.update({ id: conversation.id, status: 'open' }, { status: 'abandoned' });
     if (!affected) throw conflict('CONVERSATION_CLOSED', 'This plan is no longer open');
@@ -269,7 +315,7 @@ export class AiService {
     locale: Locale,
     placeIds?: string[],
   ): Promise<{ trip: AppTripDto; created: boolean; added: number; skipped: number; skippedForPlan: number }> {
-    const conversation = await this.requireConversation(user, conversationId);
+    const conversation = await this.requireAuthor(user, conversationId);
     if (conversation.status === 'confirmed') return { ...(await this.confirmedTrip(user, conversation, locale)), added: 0, skipped: 0, skippedForPlan: 0 };
     if (conversation.status !== 'open') throw notOpen(conversation.status);
 
@@ -288,6 +334,7 @@ export class AiService {
         // The role is checked again: it may have changed since the conversation started.
         await this.appTrips.requireMembership(user, tripId, ['owner', 'editor']);
         await this.conversations.manager.transaction((manager) => accept(manager, tripId));
+        await this.activity?.emit({ type: 'trip.itinerary', tripId, userId: user.id });
         return { trip: await this.appTrips.get(user, tripId, locale), created: false, ...counts };
       }
 
@@ -309,7 +356,7 @@ export class AiService {
       return { trip, created: true, ...counts };
     } catch (error) {
       if (!(error instanceof ConfirmRaceError)) throw error;
-      const latest = await this.requireConversation(user, conversation.id);
+      const latest = await this.requireAuthor(user, conversation.id);
       if (latest.status === 'confirmed') return { ...(await this.confirmedTrip(user, latest, locale)), added: 0, skipped: 0, skippedForPlan: 0 };
       throw notOpen(latest.status);
     }
@@ -321,11 +368,25 @@ export class AiService {
     await this.places.update({ createdBy: userId }, { createdBy: null });
   }
 
-  /** The user's own conversation. Anyone else's (or a malformed id) is NOT_FOUND, never FORBIDDEN. */
-  private async requireConversation(user: AuthUser, conversationId: string): Promise<AiConversation> {
+  /**
+   * The conversation if the caller may read it: the author, or a current member of the trip it's
+   * linked to (read-only). Anyone else (a removed member, an unlinked chat, a malformed id) → NOT_FOUND.
+   */
+  private async requireReadable(user: AuthUser, conversationId: string): Promise<{ conversation: AiConversation; readOnly: boolean }> {
     if (!isUUID(conversationId, '4')) throw conversationNotFound();
-    const conversation = await this.conversations.findOne({ where: { id: conversationId, userId: user.id } });
+    const conversation = await this.conversations.findOne({ where: { id: conversationId.toLowerCase() } });
     if (!conversation) throw conversationNotFound();
+    if (conversation.userId === user.id) return { conversation, readOnly: false };
+    if (!conversation.tripId) throw conversationNotFound();
+    const member = await this.tripMembers.findOne({ where: { tripId: conversation.tripId, userId: user.id } });
+    if (!member) throw conversationNotFound();
+    return { conversation, readOnly: true };
+  }
+
+  /** The caller's own conversation: a member who can only read it → FORBIDDEN (NOT_CONVERSATION_AUTHOR). */
+  private async requireAuthor(user: AuthUser, conversationId: string): Promise<AiConversation> {
+    const { conversation, readOnly } = await this.requireReadable(user, conversationId);
+    if (readOnly) throw notAuthor();
     return conversation;
   }
 

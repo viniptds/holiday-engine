@@ -58,6 +58,14 @@ function startOfLocalDate(zone: string, date: number, around: number): number {
   return high;
 }
 
+const toIsoDate = (date: number) =>
+  `${Math.floor(date / 10_000)}-${String(Math.floor(date / 100) % 100).padStart(2, '0')}-${String(date % 100).padStart(2, '0')}`;
+
+/** The local calendar date (`YYYY-MM-DD`) in `zone` at `instant`. */
+export function localIsoDate(zone: string, instant: Date = new Date()): string {
+  return toIsoDate(localDate(zone, instant.getTime()));
+}
+
 const nextDate = (date: number) => {
   const d = new Date(Date.UTC(Math.floor(date / 10_000), (Math.floor(date / 100) % 100) - 1, (date % 100) + 1));
   return d.getUTCFullYear() * 10_000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();

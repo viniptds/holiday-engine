@@ -15,8 +15,11 @@ describe('AppError reasons (docs/app-api-contract.md, Errors)', () => {
       'LAST_OWNER',
       'ALREADY_MEMBER',
       'TRIP_CHANGED',
+      'UNASSIGNED_MOMENTS_LIMIT',
+      'UPLOAD_INCOMPLETE',
+      'UPLOAD_MISMATCH',
     ]);
-    expect([...FORBIDDEN_REASONS]).toEqual(['REMOVED_FROM_TRIP', 'INVITE_OTHER_ACCOUNT', 'DEV_ACCOUNT_EMAIL_INVITE']);
+    expect([...FORBIDDEN_REASONS]).toEqual(['REMOVED_FROM_TRIP', 'INVITE_OTHER_ACCOUNT', 'DEV_ACCOUNT_EMAIL_INVITE', 'NOT_CONVERSATION_AUTHOR']);
   });
 
   it('puts the reason in the body, next to code and message (and fields)', () => {
