@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository } from 'typeorm';
 import type { AuthUser } from '../app-common/auth-user.js';
@@ -7,6 +7,7 @@ import { RateWindow } from '../app-common/rate-window.js';
 import { DEFAULT_TIMEZONE, isValidTimeZone, localIsoDate } from '../app-common/timezone.js';
 import { AppTripsService } from '../app-trips/app-trips.service.js';
 import { TripMember } from '../app-trips/trip-member.entity.js';
+import { TripActivity } from '../app-trips/trip-activity.js';
 import type { TripActivityEvent } from '../app-trips/trip-activity.js';
 import { TripPlace } from '../ai/entities/trip-place.entity.js';
 import { DestinationResolver } from '../media/destination-resolver.js';
@@ -71,6 +72,7 @@ export class AchievementsService {
     private readonly appTrips: AppTripsService,
     private readonly moments: MomentsService,
     private readonly destinations: DestinationResolver,
+    @Optional() private readonly activity?: TripActivity,
   ) {}
 
   /** TripActivity listener: re-checks what the write can have changed. */
@@ -93,6 +95,8 @@ export class AchievementsService {
       case 'moment.completed':
         if (event.tripId) await this.evaluateTrip(event.tripId, now);
         await this.evaluateUser(event.userId, now);
+        return;
+      default:
         return;
     }
   }
@@ -302,6 +306,7 @@ export class AchievementsService {
       // Its own statement (no transaction): a duplicate fails only this insert.
       await this.achievements.insert({ userId, key, tripId, unlockedAt: new Date(), seenAt: null });
       this.logger.log(`User ${userId} unlocked ${key}${tripId ? ` on trip ${tripId}` : ''}`);
+      await this.activity?.emit({ type: 'achievement.unlocked', tripId, userId, key });
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
     }

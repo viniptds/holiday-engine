@@ -1,3 +1,4 @@
+import type { NotificationPrefs } from '../notifications/notification-prefs.js';
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, Index, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 
 /**
@@ -29,6 +30,14 @@ export class User {
   /** The latest valid IANA zone the app sent (`X-Timezone`); null until it sends one. */
   @Column({ type: 'text', nullable: true })
   timezone: string | null;
+
+  /** The app's language (from Accept-Language), for notifications rendered at send time. */
+  @Column({ type: 'text', nullable: true })
+  locale: string | null;
+
+  /** docs/app-notifications-checklist-calendar-spec.md; null = all on (the default). */
+  @Column({ type: 'jsonb', nullable: true })
+  notificationPrefs: NotificationPrefs | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

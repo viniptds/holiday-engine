@@ -19,6 +19,8 @@ import { devBillingModule } from './billing/dev-billing.module.js';
 import { MediaModule } from './media/media.module.js';
 import { MomentsModule } from './moments/moments.module.js';
 import { AchievementsModule } from './achievements/achievements.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
+import { ChecklistModule } from './checklist/checklist.module.js';
 import { databaseConfig } from './database/database.config.js';
 
 @Module({
@@ -55,6 +57,8 @@ import { databaseConfig } from './database/database.config.js';
     MediaModule,
     MomentsModule,
     AchievementsModule,
+    NotificationsModule,
+    ChecklistModule,
   ],
   controllers: [AppController],
 })

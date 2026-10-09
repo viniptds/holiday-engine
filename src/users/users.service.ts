@@ -69,6 +69,10 @@ export class UsersService implements UserDirectory {
   }
 
   /** Stores the user's IANA time zone (already validated). */
+  async setLocale(id: string, locale: string): Promise<void> {
+    await this.users.update({ id }, { locale });
+  }
+
   async setTimezone(id: string, timezone: string): Promise<void> {
     await this.users.update({ id }, { timezone });
   }

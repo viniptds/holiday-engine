@@ -15,6 +15,7 @@ import { AddBilling1760600000000 } from './1760600000000-add-billing.js';
 import { AddMoments1760700000000 } from './1760700000000-add-moments.js';
 import { AddJourneySkips1760800000000 } from './1760800000000-add-journey-skips.js';
 import { AddMomentDays1760900000000 } from './1760900000000-add-moment-days.js';
+import { AddNotificationsChecklist1761000000000 } from './1761000000000-add-notifications-checklist.js';
 
 // Register every migration here, in order.
 export const migrations = [
@@ -35,4 +36,5 @@ export const migrations = [
   AddMoments1760700000000,
   AddJourneySkips1760800000000,
   AddMomentDays1760900000000,
+  AddNotificationsChecklist1761000000000,
 ];

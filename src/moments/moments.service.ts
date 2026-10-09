@@ -210,7 +210,7 @@ export class MomentsService {
       }
       if (changes.day !== moment.day) {
         await this.moments.update({ id: moment.id }, { day: changes.day });
-        if (moment.status === 'ready' && moment.tripId) await this.activity?.emit({ type: 'moment.completed', tripId: moment.tripId, userId: moment.userId });
+        if (moment.status === 'ready' && moment.tripId) await this.activity?.emit({ type: 'moment.completed', tripId: moment.tripId, userId: moment.userId, quiet: true });
       }
     }
     const updated = (await this.moments.findOne({ where: { id: moment.id } }))!;

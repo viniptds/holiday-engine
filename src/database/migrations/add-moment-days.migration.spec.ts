@@ -13,9 +13,8 @@ async function run(direction: 'up' | 'down'): Promise<string[]> {
 }
 
 describe('AddMomentDays1760900000000', () => {
-  it('runs last, after the journey skips', () => {
-    expect(migrations.at(-1)).toBe(AddMomentDays1760900000000);
-    expect(migrations.at(-2)?.name).toBe('AddJourneySkips1760800000000');
+  it('runs after the journey skips', () => {
+    expect(migrations.indexOf(AddMomentDays1760900000000)).toBe(migrations.findIndex((m) => m.name === 'AddJourneySkips1760800000000') + 1);
   });
 
   it('adds source (existing rows → camera) and day, with the entity checks', async () => {

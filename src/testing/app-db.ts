@@ -15,7 +15,7 @@ export function appDb(): InMemoryDb {
   return new InMemoryDb()
     .define(User, {
       primary: ['id'],
-      generate: () => ({ id: randomUUID(), createdAt: new Date(), updatedAt: new Date(), deletedAt: null, timezone: null }),
+      generate: () => ({ id: randomUUID(), createdAt: new Date(), updatedAt: new Date(), deletedAt: null, timezone: null, locale: null, notificationPrefs: null }),
       updateDate: 'updatedAt',
       deleteDate: 'deletedAt',
     })

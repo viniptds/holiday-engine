@@ -14,6 +14,14 @@ export class RateWindow {
     private readonly maxKeys = 10_000,
   ) {}
 
+  /** Throws RATE_LIMITED if `key` has no room, without counting anything (check several windows, then take). */
+  assertRoom(key: string, now = Date.now()): void {
+    const recent = (this.calls.get(key) ?? []).filter((t) => t > now - this.windowMs);
+    if (recent.length >= this.max) {
+      throw new AppError('RATE_LIMITED', this.message, undefined, { retryAfterSeconds: (recent[recent.length - this.max] + this.windowMs - now) / 1000 });
+    }
+  }
+
   /** Counts one call for `key`, or throws RATE_LIMITED without counting it. */
   take(key: string, now = Date.now()): void {
     const recent = (this.calls.get(key) ?? []).filter((t) => t > now - this.windowMs);
