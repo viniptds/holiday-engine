@@ -150,7 +150,7 @@ RevenueCat webhook and sync, entitlements (Plus), AI quota, dev billing.
 - Entity UserEntitlement `user-entitlement.entity.ts` · table `user_entitlements`
 - Dtos (1): DevGrantDto · in dev-billing.module.ts
 - fns: billingConfigFrom, concernsEntitlement, devBillingModule, isPlusState, readBillingConfig, stateAfterEvent, stateFromSubscriber, toStore
-- types: AiQuotaDto, BillingConfig, BillingProvider, BillingProviderName, EntitlementState, EntitlementStatus, EntitlementStore, LimitsDto, PlanDto, RevenueCatEvent, RevenueCatSubscriber, WebhookOutcome
+- types: AiQuotaDto, BillingConfig, BillingProvider, BillingProviderName, EntitlementState, EntitlementStatus, EntitlementStore, LimitsDto, PlanDto, PlanLimitsDto, RevenueCatEvent, RevenueCatSubscriber, WebhookOutcome
 - consts: ACTIVATING_EVENTS, BILLING_CONFIG, BILLING_PROVIDER, BILLING_PROVIDERS, ENTITLEMENT_STATUSES, ENTITLEMENT_STORES, HANDLED_EVENTS, REVENUECAT_SUBSCRIBERS_URL, SYNC_RATE_LIMIT
 
 ## src/checklist/
@@ -450,7 +450,7 @@ Found via `config.get(...)`, `process.env.X`, env key lists and similar readers.
 - EVENTS_PROVIDER · events/events.module.ts
 - EXPO_ACCESS_TOKEN · notifications/notifications.config.ts
 - FREE_AI_MESSAGES_PER_DAY · billing/billing.config.ts
-- FREE_MOMENTS_PER_TRIP · moments/moments.module.ts
+- FREE_MOMENTS_PER_TRIP · billing/billing.config.ts, moments/moments.module.ts
 - FREE_TRIP_PLACES_LIMIT · billing/billing.config.ts
 - GOOGLE_CLIENT_IDS · auth/google-token-verifier.ts
 - GOOGLE_PLACES_API_KEY · ai/ai.config.ts
@@ -476,7 +476,7 @@ Found via `config.get(...)`, `process.env.X`, env key lists and similar readers.
 - PGSSL · database/database.config.ts
 - PGUSER · database/database.config.ts
 - PLACES_PROVIDER · ai/ai.config.ts
-- PLUS_MOMENTS_PER_TRIP · moments/moments.module.ts
+- PLUS_MOMENTS_PER_TRIP · billing/billing.config.ts, moments/moments.module.ts
 - PORT · main.ts, moments/moments.module.ts, notifications/notifications.config.ts
 - PUSH_PROVIDER · notifications/notifications.config.ts
 - REDIS_HOST · app.module.ts
