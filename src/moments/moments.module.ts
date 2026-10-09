@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module.js';
 import { AppTripsModule } from '../app-trips/app-trips.module.js';
 import { TripMember } from '../app-trips/trip-member.entity.js';
+import { TripScheduleHooks } from '../app-trips/trip-schedule-hooks.js';
+import { Trip } from '../trips/trip.entity.js';
 import { BillingModule } from '../billing/billing.module.js';
 import { UserDeletionHooks } from '../users/user-deletion-hooks.js';
 import { Moment } from './moment.entity.js';
@@ -27,7 +29,7 @@ export function createObjectStorage(config: StorageConfig, settings: ConfigServi
 
 /** Moments and their storage (docs/app-moments-spec.md §2). Startup fails on bad storage settings. */
 @Module({
-  imports: [TypeOrmModule.forFeature([Moment, TripMember]), AuthModule, AppTripsModule, BillingModule],
+  imports: [TypeOrmModule.forFeature([Moment, TripMember, Trip]), AuthModule, AppTripsModule, BillingModule],
   controllers: [MomentsController, TripMomentsController, FilesController],
   providers: [
     { provide: STORAGE_CONFIG, inject: [ConfigService], useFactory: (config: ConfigService) => readStorageConfig(envOf(config)) },
@@ -43,12 +45,15 @@ export class MomentsModule implements OnModuleInit {
     private readonly deletionHooks: UserDeletionHooks,
     private readonly moments: MomentsService,
     @Inject(STORAGE_CONFIG) private readonly config: StorageConfig,
+    private readonly scheduleHooks: TripScheduleHooks,
   ) {}
 
   onModuleInit() {
     this.logger.log(`Moments storage: ${this.config.driver}`);
     // `DELETE /me`: the user's moments go, with their objects.
     this.deletionHooks.register((userId) => this.moments.handleUserDeleted(userId));
+    // A date change moves photo days (uploads past the end → no day; camera days recalculated).
+    this.scheduleHooks.register((manager, trip) => this.moments.onDatesChanged(manager, trip));
   }
 }
 

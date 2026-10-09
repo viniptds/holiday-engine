@@ -18,6 +18,7 @@ describe('AppError reasons (docs/app-api-contract.md, Errors)', () => {
       'UNASSIGNED_MOMENTS_LIMIT',
       'UPLOAD_INCOMPLETE',
       'UPLOAD_MISMATCH',
+      'MOMENT_DAY_LOCKED',
     ]);
     expect([...FORBIDDEN_REASONS]).toEqual(['REMOVED_FROM_TRIP', 'INVITE_OTHER_ACCOUNT', 'DEV_ACCOUNT_EMAIL_INVITE', 'NOT_CONVERSATION_AUTHOR']);
     expect([...VALIDATION_REASONS]).toEqual(['STEP_NOT_SKIPPABLE']);

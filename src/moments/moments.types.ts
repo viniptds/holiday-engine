@@ -5,6 +5,10 @@ export type MomentDto = {
   id: string;
   tripId: string | null;
   status: 'pending' | 'ready';
+  source: 'camera' | 'upload';
+  day: number | null;
+  /** True only for uploads, for their uploader or the trip's owner. */
+  dayEditable: boolean;
   author: { userId: string; displayName: string; avatarUrl: string | null };
   mine: boolean;
   contentType: string;
@@ -21,6 +25,7 @@ export type MomentDto = {
 export type CreatedMomentDto = { moment: MomentDto; upload: PresignedUpload };
 
 export const MOMENT_CONTENT_TYPES = ['image/jpeg'] as const;
+export const MOMENT_SOURCES = ['camera', 'upload'] as const;
 export const MAX_MOMENT_BYTES = 10 * 1024 * 1024;
 export const MAX_UNASSIGNED_MOMENTS = 50;
 export const UPLOAD_RATE_LIMIT = { max: 60, windowMs: 60 * 60 * 1000 };
