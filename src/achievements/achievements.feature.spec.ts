@@ -12,11 +12,12 @@ import type { CreatedMomentDto } from '../moments/moments.types.js';
 import { User } from '../users/user.entity.js';
 import { AchievementsService } from './achievements.service.js';
 import { UserAchievement } from './user-achievement.entity.js';
+import { TripJourneySkip } from './trip-journey-skip.entity.js';
 import type { AchievementDto, JourneyNode } from './achievements.types.js';
 import { RateWindow } from '../app-common/rate-window.js';
 import { EVENT_RATE_LIMIT } from './achievements.types.js';
 
-type Journey = { nodes: JourneyNode[]; achievements: AchievementDto[] };
+type Journey = { nodes: JourneyNode[]; achievements: AchievementDto[]; progress: { resolved: number; total: number } };
 
 describe('Achievements and the Journey (feature)', () => {
   const storage = new MemoryObjectStorage();
@@ -275,7 +276,9 @@ describe('Achievements and the Journey (feature)', () => {
   });
 
   describe('GET /trips/:id/journey', () => {
-    it('lists the planning milestones, Day 1…N and Trip finished, with their states and up to 3 thumbnails a day', async () => {
+    const view = (nodes: JourneyNode[]) => nodes.map((n) => `${n.key}:${n.status}`);
+
+    it('lists the planning milestones, Day 1…N and Trip finished, with their states, progress and up to 3 thumbnails a day', async () => {
       const trip = h.seedTrip([[OWNER, 'owner'], [VIEWER, 'viewer']], { startDate: isoDay(-1), endDate: isoDay(1) });
       for (let i = 0; i < 4; i++) await takeMoment(VIEWER, trip.id, new Date(Date.now() - DAY_MS - i * 60_000).toISOString());
 
@@ -283,18 +286,53 @@ describe('Achievements and the Journey (feature)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.nodes.map(({ momentThumbs, ...node }) => ({ ...node, thumbs: momentThumbs?.length }))).toEqual([
-        { kind: 'milestone', key: 'trip_created', title: 'Trip created', status: 'done', thumbs: undefined },
-        { kind: 'milestone', key: 'first_place', title: 'First place added', status: 'current', thumbs: undefined },
-        { kind: 'milestone', key: 'all_days_planned', title: 'Every day planned', status: 'current', thumbs: undefined },
-        { kind: 'milestone', key: 'first_member_joined', title: 'First person joined', status: 'done', thumbs: undefined },
-        { kind: 'day', key: 'day_completed:1', title: 'Day 1', day: 1, date: isoDay(-1), status: 'done', thumbs: 3 },
-        { kind: 'day', key: 'day_completed:2', title: 'Day 2', day: 2, date: isoDay(0), status: 'current', thumbs: 0 },
-        { kind: 'day', key: 'day_completed:3', title: 'Day 3', day: 3, date: isoDay(1), status: 'locked', thumbs: 0 },
-        { kind: 'milestone', key: 'trip_finished', title: 'Trip finished', status: 'current', thumbs: undefined },
+        { kind: 'milestone', key: 'trip_created', title: 'Trip created', status: 'done', skippable: false, thumbs: undefined },
+        { kind: 'milestone', key: 'first_place', title: 'First place added', status: 'current', skippable: false, thumbs: undefined },
+        { kind: 'milestone', key: 'all_days_planned', title: 'Every day planned', status: 'todo', skippable: true, thumbs: undefined },
+        { kind: 'milestone', key: 'first_member_joined', title: 'First person joined', status: 'done', skippable: true, thumbs: undefined },
+        { kind: 'day', key: 'day_completed:1', title: 'Day 1', day: 1, date: isoDay(-1), status: 'done', skippable: false, thumbs: 3 },
+        { kind: 'day', key: 'day_completed:2', title: 'Day 2', day: 2, date: isoDay(0), status: 'todo', skippable: false, thumbs: 0 },
+        { kind: 'day', key: 'day_completed:3', title: 'Day 3', day: 3, date: isoDay(1), status: 'locked', skippable: false, thumbs: 0 },
+        { kind: 'milestone', key: 'trip_finished', title: 'Trip finished', status: 'locked', skippable: false, thumbs: undefined },
       ]);
+      expect(res.body.progress).toEqual({ resolved: 3, total: 8 });
       expect(res.body.nodes[4].momentThumbs!.every((url) => url.startsWith('https://bucket.test/moments/'))).toBe(true);
       expect(res.body.achievements.map((a) => a.key).sort()).toEqual(['day_completed:1', 'first_member_joined', 'trip_created', 'trip_started']);
       expect(res.body.achievements.every((a) => a.tripId === trip.id)).toBe(true);
+    });
+
+    it('counts out-of-order completion as done: a day photo before any place', async () => {
+      const trip = h.seedTrip([[OWNER, 'owner']], { startDate: isoDay(0), endDate: isoDay(2) });
+      await takeMoment(OWNER, trip.id, new Date().toISOString());
+
+      const { body } = await h.json<Journey>('GET', `/trips/${trip.id}/journey`, OWNER);
+
+      expect(view(body.nodes)).toEqual([
+        'trip_created:done',
+        'first_place:current',
+        'all_days_planned:todo',
+        'first_member_joined:todo',
+        'day_completed:1:done',
+        'day_completed:2:locked',
+        'day_completed:3:locked',
+        'trip_finished:locked',
+      ]);
+    });
+
+    it('has at most one current node, and none when everything open is resolved or locked', async () => {
+      const trip = h.seedTrip([[OWNER, 'owner'], [EDITOR, 'editor']], { startDate: isoDay(3), endDate: isoDay(3) });
+      await addPlace(trip.id, 1);
+      await h.json('POST', `/trips/${trip.id}/journey/skips`, OWNER, { key: 'first_member_joined' });
+
+      const { body } = await h.json<Journey>('GET', `/trips/${trip.id}/journey`, OWNER);
+
+      expect(view(body.nodes)).toEqual(['trip_created:done', 'first_place:done', 'all_days_planned:done', 'first_member_joined:done', 'day_completed:1:locked', 'trip_finished:locked']);
+      expect(body.nodes.filter((n) => n.status === 'current')).toHaveLength(0);
+      const other = h.seedTrip([[OWNER, 'owner']], { startDate: isoDay(-3), endDate: isoDay(-2) });
+      const open = (await h.json<Journey>('GET', `/trips/${other.id}/journey`, OWNER)).body.nodes;
+      expect(open.filter((n) => n.status === 'current').map((n) => n.key)).toEqual(['first_place']);
+      // Past days without a photo can still be done: open, not locked; a finished trip is done.
+      expect(view(open).slice(-3)).toEqual(['day_completed:1:todo', 'day_completed:2:todo', 'trip_finished:done']);
     });
 
     it.each([
@@ -310,18 +348,122 @@ describe('Achievements and the Journey (feature)', () => {
       expect(res.body.nodes.at(-1)?.status).toBe('locked');
     });
 
-    it('marks a finished trip done and a past day done even without photos', async () => {
-      const trip = h.seedTrip([[OWNER, 'owner']], { startDate: isoDay(-5), endDate: isoDay(-4) });
+    it('keeps future days and an unfinished trip locked, whatever else is done', async () => {
+      const trip = h.seedTrip([[OWNER, 'owner']], { startDate: isoDay(10), endDate: isoDay(11) });
 
-      const res = await h.json<Journey>('GET', `/trips/${trip.id}/journey`, OWNER);
+      const { body } = await h.json<Journey>('GET', `/trips/${trip.id}/journey`, OWNER);
 
-      expect(res.body.nodes.slice(-3).map((n) => n.status)).toEqual(['done', 'done', 'done']);
+      expect(view(body.nodes).slice(-3)).toEqual(['day_completed:1:locked', 'day_completed:2:locked', 'trip_finished:locked']);
     });
 
     it('is for members only', async () => {
       const trip = h.seedTrip([[OWNER, 'owner']]);
       expect((await h.json('GET', `/trips/${trip.id}/journey`, OTHER)).status).toBe(404);
       expect((await h.json('GET', `/trips/not-a-trip/journey`, OWNER)).status).toBe(404);
+    });
+  });
+
+  describe('skipping Journey steps', () => {
+    const skip = (tripId: string, user: string, key: string) => h.json<{ journey: Journey }>('POST', `/trips/${tripId}/journey/skips`, user, { key });
+    const unskip = (tripId: string, user: string, key: string) => h.json<{ journey: Journey }>('DELETE', `/trips/${tripId}/journey/skips/${key}`, user);
+    const node = (journey: Journey, key: string) => journey.nodes.find((n) => n.key === key)!;
+
+    it('skips a step for the whole trip: every member sees it skipped, with who skipped it, and progress counts it', async () => {
+      const trip = h.seedTrip([[OWNER, 'owner'], [EDITOR, 'editor'], [VIEWER, 'viewer']], { startDate: isoDay(5), endDate: isoDay(5) });
+
+      const res = await skip(trip.id, EDITOR, 'all_days_planned');
+
+      expect(res.status).toBe(200);
+      expect(node(res.body.journey, 'all_days_planned')).toMatchObject({
+        status: 'skipped',
+        skippable: true,
+        skippedBy: { userId: EDITOR, displayName: 'Traveler 2222', avatarUrl: null, role: 'editor' },
+      });
+      // trip_created + first_member_joined done, all_days_planned skipped.
+      expect(res.body.journey.progress).toEqual({ resolved: 3, total: 6 });
+      const seen = (await h.json<Journey>('GET', `/trips/${trip.id}/journey`, VIEWER)).body;
+      expect(node(seen, 'all_days_planned').status).toBe('skipped');
+      expect(node(seen, 'first_place').status).toBe('current');
+      expect(node(seen, 'first_place')).not.toHaveProperty('skippedBy');
+    });
+
+    it('never awards an achievement for a skip', async () => {
+      const trip = h.seedTrip([[OWNER, 'owner']], { startDate: isoDay(5), endDate: isoDay(5) });
+
+      await skip(trip.id, OWNER, 'first_member_joined');
+      await skip(trip.id, OWNER, 'all_days_planned');
+      await h.json('GET', '/me/achievements', OWNER);
+
+      expect(keys(OWNER, trip.id)).toEqual(['trip_created']);
+    });
+
+    it('lets done beat skipped: completing a skipped step shows it done and unlocks it as usual', async () => {
+      const trip = h.seedTrip([[OWNER, 'owner']], { startDate: isoDay(5), endDate: isoDay(5) });
+      await skip(trip.id, OWNER, 'all_days_planned');
+
+      await addPlace(trip.id, 1);
+
+      const { body } = await h.json<Journey>('GET', `/trips/${trip.id}/journey`, OWNER);
+      expect(node(body, 'all_days_planned')).toMatchObject({ status: 'done' });
+      expect(node(body, 'all_days_planned')).not.toHaveProperty('skippedBy');
+      expect(keys(OWNER, trip.id)).toContain('all_days_planned');
+    });
+
+    it('unskips; repeats on both sides are no-ops answering 200', async () => {
+      const trip = h.seedTrip([[OWNER, 'owner']], { startDate: isoDay(5), endDate: isoDay(5) });
+
+      expect((await skip(trip.id, OWNER, 'first_member_joined')).status).toBe(200);
+      expect((await skip(trip.id, OWNER, 'first_member_joined')).status).toBe(200);
+      expect(h.db.all(TripJourneySkip)).toHaveLength(1);
+      const undone = await unskip(trip.id, OWNER, 'first_member_joined');
+      expect(undone.status).toBe(200);
+      expect(node(undone.body.journey, 'first_member_joined').status).toBe('todo');
+      expect((await unskip(trip.id, OWNER, 'first_member_joined')).status).toBe(200);
+      expect(h.db.all(TripJourneySkip)).toHaveLength(0);
+    });
+
+    it.each([
+      [OWNER, 200],
+      [EDITOR, 200],
+      [VIEWER, 403],
+      [OTHER, 404],
+    ])('role matrix: %s → %i on skip and unskip', async (user, status) => {
+      const trip = h.seedTrip([[OWNER, 'owner'], [EDITOR, 'editor'], [VIEWER, 'viewer']], { startDate: isoDay(5), endDate: isoDay(5) });
+
+      expect((await skip(trip.id, user, 'all_days_planned')).status).toBe(status);
+      expect((await unskip(trip.id, user, 'all_days_planned')).status).toBe(status);
+    });
+
+    it.each(['trip_created', 'first_place', 'day_completed:1', 'trip_finished', 'nope'])('refuses to skip %s: 400 VALIDATION / STEP_NOT_SKIPPABLE', async (key) => {
+      const trip = h.seedTrip([[OWNER, 'owner']], { startDate: isoDay(5), endDate: isoDay(5) });
+
+      const posted = await skip(trip.id, OWNER, key);
+      const deleted = await unskip(trip.id, OWNER, encodeURIComponent(key));
+
+      for (const res of [posted, deleted]) {
+        expect(res.status).toBe(400);
+        expect(res.body).toMatchObject({ code: 'VALIDATION', reason: 'STEP_NOT_SKIPPABLE' });
+      }
+      expect(h.db.all(TripJourneySkip)).toHaveLength(0);
+    });
+
+    it('refuses a body without a key', async () => {
+      const trip = h.seedTrip([[OWNER, 'owner']]);
+      expect((await h.json('POST', `/trips/${trip.id}/journey/skips`, OWNER, {})).status).toBe(400);
+    });
+
+    it('goes with the trip, and keeps the skip (without skippedBy) when the skipper is gone', async () => {
+      const trip = h.seedTrip([[OWNER, 'owner'], [EDITOR, 'editor']], { startDate: isoDay(5), endDate: isoDay(5) });
+      await skip(trip.id, EDITOR, 'all_days_planned');
+      expect((await h.call('DELETE', `/trips/${trip.id}/members/me`, EDITOR)).status).toBe(204);
+
+      const afterLeave = (await h.json<Journey>('GET', `/trips/${trip.id}/journey`, OWNER)).body;
+      expect(node(afterLeave, 'all_days_planned').skippedBy).toMatchObject({ userId: EDITOR, role: null });
+      await h.db.repository(User).softDelete({ id: EDITOR });
+      expect(node((await h.json<Journey>('GET', `/trips/${trip.id}/journey`, OWNER)).body, 'all_days_planned')).not.toHaveProperty('skippedBy');
+
+      expect((await h.call('DELETE', `/trips/${trip.id}`, OWNER)).status).toBe(204);
+      expect(h.db.all(TripJourneySkip)).toEqual([]);
     });
   });
 });

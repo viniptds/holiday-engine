@@ -10,12 +10,13 @@ import { MomentsModule } from '../moments/moments.module.js';
 import { Trip } from '../trips/trip.entity.js';
 import { User } from '../users/user.entity.js';
 import { UserAchievement } from './user-achievement.entity.js';
+import { TripJourneySkip } from './trip-journey-skip.entity.js';
 import { AchievementsService } from './achievements.service.js';
 import { AchievementsController, JourneyController, MyAchievementsController } from './achievements.controller.js';
 
 /** Achievements and the Journey path (docs/app-moments-spec.md §3). */
 @Module({
-  imports: [TypeOrmModule.forFeature([UserAchievement, Trip, TripMember, TripPlace, User]), AuthModule, AppTripsModule, MomentsModule, MediaModule],
+  imports: [TypeOrmModule.forFeature([UserAchievement, TripJourneySkip, Trip, TripMember, TripPlace, User]), AuthModule, AppTripsModule, MomentsModule, MediaModule],
   controllers: [AchievementsController, MyAchievementsController, JourneyController],
   providers: [AchievementsService],
   exports: [AchievementsService],

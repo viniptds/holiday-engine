@@ -1,4 +1,4 @@
-import { AppError, CONFLICT_REASONS, conflict, forbidden, FORBIDDEN_REASONS } from './app-error.js';
+import { AppError, CONFLICT_REASONS, conflict, forbidden, FORBIDDEN_REASONS, VALIDATION_REASONS } from './app-error.js';
 import { toAppErrorBody } from './app-exception.filter.js';
 
 describe('AppError reasons (docs/app-api-contract.md, Errors)', () => {
@@ -20,6 +20,7 @@ describe('AppError reasons (docs/app-api-contract.md, Errors)', () => {
       'UPLOAD_MISMATCH',
     ]);
     expect([...FORBIDDEN_REASONS]).toEqual(['REMOVED_FROM_TRIP', 'INVITE_OTHER_ACCOUNT', 'DEV_ACCOUNT_EMAIL_INVITE', 'NOT_CONVERSATION_AUTHOR']);
+    expect([...VALIDATION_REASONS]).toEqual(['STEP_NOT_SKIPPABLE']);
   });
 
   it('puts the reason in the body, next to code and message (and fields)', () => {

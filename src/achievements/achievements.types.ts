@@ -26,7 +26,17 @@ export const CITY_MILESTONES: [number, string][] = [
 
 export type AchievementDto = { key: string; tripId: string | null; unlockedAt: string; seen: boolean };
 
-export type JourneyNodeStatus = 'locked' | 'current' | 'done';
+/**
+ * done: reached, in any order (beats skipped). skipped: skipped and not done. current: the first
+ * node in suggested order that is neither (at most one). todo: any other open node. locked: only
+ * time-based nodes (future days, Trip finished before the end).
+ */
+export type JourneyNodeStatus = 'done' | 'skipped' | 'current' | 'todo' | 'locked';
+/** The only steps that can be skipped (for the whole trip, by owners and editors). */
+export const SKIPPABLE_KEYS = ['first_member_joined', 'all_days_planned'] as const;
+export type SkippableKey = (typeof SKIPPABLE_KEYS)[number];
+export type JourneyMember = { userId: string; displayName: string; avatarUrl: string | null; role: 'owner' | 'editor' | 'viewer' | null };
+export type JourneyDto = { nodes: JourneyNode[]; achievements: AchievementDto[]; progress: { resolved: number; total: number } };
 export type JourneyNode = {
   kind: 'milestone' | 'day';
   key: string;
@@ -34,6 +44,9 @@ export type JourneyNode = {
   day?: number;
   date?: string;
   status: JourneyNodeStatus;
+  skippable: boolean;
+  /** Who skipped it (skipped nodes; absent if that account is gone). `role` null if they left the trip. */
+  skippedBy?: JourneyMember;
   /** Day nodes: up to 3 signed URLs of that day's moments, newest first. */
   momentThumbs?: string[];
 };

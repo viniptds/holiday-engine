@@ -15,9 +15,8 @@ async function run(direction: 'up' | 'down'): Promise<string[]> {
 }
 
 describe('AddMoments1760700000000', () => {
-  it('runs last, after billing', () => {
-    expect(migrations.at(-1)).toBe(AddMoments1760700000000);
-    expect(migrations.at(-2)?.name).toBe('AddBilling1760600000000');
+  it('runs after billing', () => {
+    expect(migrations.indexOf(AddMoments1760700000000)).toBe(migrations.findIndex((m) => m.name === 'AddBilling1760600000000') + 1);
   });
 
   it('adds the trip columns, moments (trip SET NULL) and user_achievements with a NULL-safe unique index', async () => {

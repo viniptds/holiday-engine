@@ -47,11 +47,14 @@ export const CONFLICT_REASONS = [
   'UPLOAD_MISMATCH',
 ] as const;
 export const FORBIDDEN_REASONS = ['REMOVED_FROM_TRIP', 'INVITE_OTHER_ACCOUNT', 'DEV_ACCOUNT_EMAIL_INVITE', 'NOT_CONVERSATION_AUTHOR'] as const;
+/** VALIDATION carries a reason only where the contract lists one. */
+export const VALIDATION_REASONS = ['STEP_NOT_SKIPPABLE'] as const;
 export const PAYMENT_REQUIRED_REASONS = ['AI_QUOTA_EXCEEDED', 'TRIP_PLACES_PLUS_REQUIRED', 'MOMENTS_PLUS_REQUIRED'] as const;
 export type AppErrorReason =
   | (typeof CONFLICT_REASONS)[number]
   | (typeof FORBIDDEN_REASONS)[number]
-  | (typeof PAYMENT_REQUIRED_REASONS)[number];
+  | (typeof PAYMENT_REQUIRED_REASONS)[number]
+  | (typeof VALIDATION_REASONS)[number];
 
 /** Body of every app API error response. Some errors add documented top-level extras (`resetsAt`, `limit`). */
 export type AppErrorBody = {
