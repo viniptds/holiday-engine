@@ -22,6 +22,14 @@ export class AchievementRefDto {
   tripId: string | null;
 }
 
+/** `POST /trips/:id/journey/skips`. Which keys are skippable is checked by the service (STEP_NOT_SKIPPABLE). */
+export class JourneySkipDto {
+  @MaxLength(64)
+  @IsNotEmpty()
+  @IsString()
+  key: string;
+}
+
 /** `POST /achievements/seen`. */
 export class AchievementsSeenDto {
   @ValidateNested({ each: true })

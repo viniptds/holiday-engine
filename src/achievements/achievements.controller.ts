@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UseFilters, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, UseFilters, UseGuards } from '@nestjs/common';
 import { APP_PREFIX } from '../app-common/auth-user.js';
 import type { AuthUser } from '../app-common/auth-user.js';
 import { AppExceptionFilter } from '../app-common/app-exception.filter.js';
@@ -11,8 +11,8 @@ import { CurrentUser } from '../auth/current-user.decorator.js';
 import { StorageContext } from '../moments/request-base-url.js';
 import type { StorageRequestContext } from '../moments/storage/object-storage.js';
 import { AchievementsService } from './achievements.service.js';
-import { AchievementEventDto, AchievementsSeenDto } from './achievements.dto.js';
-import type { AchievementDto, JourneyNode } from './achievements.types.js';
+import { AchievementEventDto, AchievementsSeenDto, JourneySkipDto } from './achievements.dto.js';
+import type { AchievementDto, JourneyDto } from './achievements.types.js';
 
 /** `/achievements/events` and `/achievements/seen`. */
 @Controller(`${APP_PREFIX}/achievements`)
@@ -61,7 +61,33 @@ export class JourneyController {
     @RequestLocale() locale: Locale,
     @RequestTimezone() timeZone: string,
     @StorageContext() context: StorageRequestContext,
-  ): Promise<{ nodes: JourneyNode[]; achievements: AchievementDto[] }> {
+  ): Promise<JourneyDto> {
     return this.achievements.journey(user, tripId, locale, timeZone, context);
+  }
+
+  /** Owners and editors: skip a skippable step for the whole trip → `200 { journey }`. */
+  @Post('skips')
+  @HttpCode(HttpStatus.OK)
+  async skip(
+    @CurrentUser() user: AuthUser,
+    @Param('tripId') tripId: string,
+    @Body(appValidationPipe) body: JourneySkipDto,
+    @RequestLocale() locale: Locale,
+    @RequestTimezone() timeZone: string,
+    @StorageContext() context: StorageRequestContext,
+  ): Promise<{ journey: JourneyDto }> {
+    return { journey: await this.achievements.skip(user, tripId, body.key, locale, timeZone, context) };
+  }
+
+  @Delete('skips/:key')
+  async unskip(
+    @CurrentUser() user: AuthUser,
+    @Param('tripId') tripId: string,
+    @Param('key') key: string,
+    @RequestLocale() locale: Locale,
+    @RequestTimezone() timeZone: string,
+    @StorageContext() context: StorageRequestContext,
+  ): Promise<{ journey: JourneyDto }> {
+    return { journey: await this.achievements.unskip(user, tripId, key, locale, timeZone, context) };
   }
 }

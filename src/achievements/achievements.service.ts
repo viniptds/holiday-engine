@@ -30,7 +30,10 @@ import {
   TRIP_FINISHED,
   TRIP_STARTED,
 } from './achievements.types.js';
-import type { AchievementDto, JourneyNode, JourneyNodeStatus, PlanningKey } from './achievements.types.js';
+import { SKIPPABLE_KEYS } from './achievements.types.js';
+import type { AchievementDto, JourneyDto, JourneyMember, JourneyNode, JourneyNodeStatus, PlanningKey } from './achievements.types.js';
+import { TripJourneySkip } from './trip-journey-skip.entity.js';
+import { AppError } from '../app-common/app-error.js';
 import { JOURNEY_TITLES } from './journey-titles.js';
 
 /** The ISO date `n - 1` days after `start`. */
@@ -38,6 +41,13 @@ const dayDate = (start: string, n: number) => new Date(Date.parse(`${start}T00:0
 
 /** What a trip has, independent of who looks at it. */
 type TripFacts = { trip: Trip; days: number; planning: Record<PlanningKey, boolean>; momentDates: Set<string> };
+
+const isSkippable = (key: string) => (SKIPPABLE_KEYS as readonly string[]).includes(key);
+function requireSkippable(key: string): void {
+  if (!isSkippable(key)) {
+    throw new AppError('VALIDATION', 'Some fields are invalid', { key: `Only ${SKIPPABLE_KEYS.join(' and ')} can be skipped` }, { reason: 'STEP_NOT_SKIPPABLE' });
+  }
+}
 
 const isUniqueViolation = (error: unknown) => (error as { code?: string })?.code === '23505';
 
@@ -57,6 +67,7 @@ export class AchievementsService {
     @InjectRepository(TripMember) private readonly members: Repository<TripMember>,
     @InjectRepository(TripPlace) private readonly places: Repository<TripPlace>,
     @InjectRepository(User) private readonly users: Repository<User>,
+    @InjectRepository(TripJourneySkip) private readonly skips: Repository<TripJourneySkip>,
     private readonly appTrips: AppTripsService,
     private readonly moments: MomentsService,
     private readonly destinations: DestinationResolver,
@@ -117,30 +128,90 @@ export class AchievementsService {
     timeZone: string,
     context: StorageRequestContext,
     now = new Date(),
-  ): Promise<{ nodes: JourneyNode[]; achievements: AchievementDto[] }> {
+  ): Promise<JourneyDto> {
     const { trip } = await this.appTrips.requireMembership(user, tripId);
-    const facts = await this.tripFacts(trip!);
+    return this.buildJourney(user, trip!, locale, timeZone, context, now);
+  }
+
+  /** Owners and editors skip a skippable step for the whole trip. Repeats are no-ops. Never awards anything. */
+  async skip(user: AuthUser, tripId: string, key: string, locale: Locale, timeZone: string, context: StorageRequestContext): Promise<JourneyDto> {
+    const { trip } = await this.appTrips.requireMembership(user, tripId, ['owner', 'editor']);
+    requireSkippable(key);
+    if (!(await this.skips.findOne({ where: { tripId: trip!.id, key } }))) {
+      try {
+        await this.skips.insert({ tripId: trip!.id, key, skippedBy: user.id, skippedAt: new Date() });
+      } catch (error) {
+        // A concurrent skip of the same step won.
+        if (!isUniqueViolation(error)) throw error;
+      }
+    }
+    return this.buildJourney(user, trip!, locale, timeZone, context);
+  }
+
+  /** Undoes a skip (owners and editors). Unskipping something not skipped is a no-op. */
+  async unskip(user: AuthUser, tripId: string, key: string, locale: Locale, timeZone: string, context: StorageRequestContext): Promise<JourneyDto> {
+    const { trip } = await this.appTrips.requireMembership(user, tripId, ['owner', 'editor']);
+    requireSkippable(key);
+    await this.skips.delete({ tripId: trip!.id, key });
+    return this.buildJourney(user, trip!, locale, timeZone, context);
+  }
+
+  private async buildJourney(user: AuthUser, trip: Trip, locale: Locale, timeZone: string, context: StorageRequestContext, now = new Date()): Promise<JourneyDto> {
+    const facts = await this.tripFacts(trip);
     await this.unlockTrip(facts, [{ userId: user.id, zone: timeZone }], now);
 
     const titles = JOURNEY_TITLES[locale];
     const today = localIsoDate(zoneOr(timeZone), now);
-    const nodes: JourneyNode[] = PLANNING_KEYS.map((key) => ({
+    const skipRows = await this.skips.find({ where: { tripId: trip.id } });
+    const skips = new Map(skipRows.map((s) => [s.key, s]));
+    const skippers = await this.skippers(trip.id, skipRows);
+    /** done beats skipped; anything else open is decided below (current/todo). */
+    const state = (key: string, done: boolean, locked = false): JourneyNodeStatus | 'open' =>
+      done ? 'done' : skips.has(key) && isSkippable(key) ? 'skipped' : locked ? 'locked' : 'open';
+    type Draft = Omit<JourneyNode, 'status'> & { status: JourneyNodeStatus | 'open' };
+
+    const drafts: Draft[] = PLANNING_KEYS.map((key) => ({
       kind: 'milestone' as const,
       key,
       title: titles[key],
-      status: facts.planning[key] ? 'done' : 'current',
+      status: state(key, facts.planning[key]),
+      skippable: isSkippable(key),
     }));
     const thumbs = await this.moments.thumbsByDay(facts.trip.id, MAX_THUMBS_PER_DAY, context);
     for (let n = 1; n <= facts.days; n++) {
       const date = dayDate(facts.trip.startDate, n);
-      const status: JourneyNodeStatus = facts.momentDates.has(date) || date < today ? 'done' : date === today ? 'current' : 'locked';
-      nodes.push({ kind: 'day', key: `${DAY_COMPLETED_PREFIX}${n}`, title: titles.day(n), day: n, date, status, momentThumbs: thumbs.get(date) ?? [] });
+      const key = `${DAY_COMPLETED_PREFIX}${n}`;
+      // A day is done once it has a photo (any order); a future day is locked until it comes.
+      drafts.push({ kind: 'day', key, title: titles.day(n), day: n, date, status: state(key, facts.momentDates.has(date), date > today), skippable: false, momentThumbs: thumbs.get(date) ?? [] });
     }
-    const finished: JourneyNodeStatus = today > facts.trip.endDate ? 'done' : today >= facts.trip.startDate ? 'current' : 'locked';
-    nodes.push({ kind: 'milestone', key: TRIP_FINISHED, title: titles.trip_finished, status: finished });
+    drafts.push({ kind: 'milestone', key: TRIP_FINISHED, title: titles.trip_finished, status: state(TRIP_FINISHED, today > facts.trip.endDate, true), skippable: false });
+
+    let current = false;
+    const nodes: JourneyNode[] = drafts.map((draft) => {
+      let status = draft.status;
+      if (status === 'open') {
+        status = current ? 'todo' : 'current';
+        current = true;
+      }
+      const skipper = status === 'skipped' ? skippers.get(skips.get(draft.key)!.skippedBy ?? '') : undefined;
+      return { ...draft, status, ...(skipper ? { skippedBy: skipper } : {}) };
+    });
+    const resolved = nodes.filter((n) => n.status === 'done' || n.status === 'skipped').length;
 
     const rows = await this.achievements.find({ where: { userId: user.id, tripId: facts.trip.id }, order: { unlockedAt: 'ASC' } });
-    return { nodes, achievements: rows.map(toDto) };
+    return { nodes, achievements: rows.map(toDto), progress: { resolved, total: nodes.length } };
+  }
+
+  /** The members who skipped steps, as MemberSummary-like values (role null if they left). */
+  private async skippers(tripId: string, rows: TripJourneySkip[]): Promise<Map<string, JourneyMember>> {
+    const ids = [...new Set(rows.map((r) => r.skippedBy).filter((id): id is string => !!id))];
+    if (ids.length === 0) return new Map();
+    const [users, members] = await Promise.all([
+      this.users.find({ where: { id: In(ids) } }),
+      this.members.find({ where: { tripId, userId: In(ids) } }),
+    ]);
+    const roles = new Map(members.map((m) => [m.userId, m.role]));
+    return new Map(users.map((u) => [u.id, { userId: u.id, displayName: u.displayName, avatarUrl: u.avatarUrl ?? null, role: roles.get(u.id) ?? null }]));
   }
 
   /** Re-checks one trip for all its current members (or only `onlyUserIds`). */

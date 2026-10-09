@@ -15,6 +15,7 @@ import { MembersModule } from '../../members/members.module.js';
 import { MediaModule } from '../../media/media.module.js';
 import { AchievementsModule } from '../../achievements/achievements.module.js';
 import { UserAchievement } from '../../achievements/user-achievement.entity.js';
+import { TripJourneySkip } from '../../achievements/trip-journey-skip.entity.js';
 import { Moment } from '../moment.entity.js';
 import { MomentsModule } from '../moments.module.js';
 import { OBJECT_STORAGE } from '../storage/object-storage.js';
@@ -36,6 +37,11 @@ export function momentsDb(): InMemoryDb {
       unique: [['userId', 'key', 'tripId']],
       generate: () => ({ id: randomUUID(), unlockedAt: new Date(), seenAt: null }),
       relations: { trip: { entity: Trip, column: 'tripId' }, user: { entity: User, column: 'userId' } },
+    })
+    .define(TripJourneySkip, {
+      primary: ['tripId', 'key'],
+      generate: () => ({ skippedAt: new Date() }),
+      relations: { trip: { entity: Trip, column: 'tripId' }, skipper: { entity: User, column: 'skippedBy', onDelete: 'SET NULL' } },
     });
 }
 
@@ -97,7 +103,7 @@ export function momentsTestingModule(db: InMemoryDb, config: Record<string, stri
     FREE_AI_MESSAGES_PER_DAY: '1000',
     ...config,
   });
-  for (const entity of [AiConversation, AiMessage, TripPlace, Moment, UserAchievement]) {
+  for (const entity of [AiConversation, AiMessage, TripPlace, Moment, UserAchievement, TripJourneySkip]) {
     builder = builder.overrideProvider(getRepositoryToken(entity)).useValue(db.repository(entity as never));
   }
   if (storage) builder = builder.overrideProvider(OBJECT_STORAGE).useValue(storage);
