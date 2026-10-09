@@ -7,6 +7,7 @@ import { AuthModule } from '../auth/auth.module.js';
 import { AppTripsModule } from '../app-trips/app-trips.module.js';
 import { WizardModule } from '../wizard/wizard.module.js';
 import { BillingModule } from '../billing/billing.module.js';
+import { IdempotencyModule } from '../idempotency/idempotency.module.js';
 import { UserDeletionHooks } from '../users/user-deletion-hooks.js';
 import { AI_CONFIG, aiConfigFrom } from './ai.config.js';
 import type { AiConfig } from './ai.config.js';
@@ -63,7 +64,7 @@ export function createPlacesProvider(config: AiConfig): PlacesDirectory {
  * fails on bad AI settings (`readAiConfig`).
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([AiConversation, AiMessage, TripPlace, Trip, TripMember]), AuthModule, AppTripsModule, WizardModule, BillingModule],
+  imports: [TypeOrmModule.forFeature([AiConversation, AiMessage, TripPlace, Trip, TripMember]), AuthModule, AppTripsModule, WizardModule, BillingModule, IdempotencyModule],
   controllers: [AiConversationsController, TripAiConversationsController, TripPlacesController, TripItineraryController],
   providers: [
     { provide: AI_CONFIG, inject: [ConfigService], useFactory: aiConfigFrom },

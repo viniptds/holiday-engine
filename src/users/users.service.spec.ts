@@ -14,6 +14,9 @@ describe('UsersService', () => {
       email: 'ana@example.com',
       displayName: 'Ana',
       avatarUrl: 'https://pic/ana',
+      avatarSource: 'google',
+      googlePictureUrl: 'https://pic/ana',
+      avatarKey: null,
       homeCity: null,
       createdAt: new Date('2026-10-01T00:00:00.000Z'),
       updatedAt: new Date('2026-10-01T00:00:00.000Z'),
@@ -49,6 +52,8 @@ describe('UsersService', () => {
         googleSub: 'g1',
         email: 'ana@example.com',
         displayName: 'Ana Silva',
+        avatarSource: 'google',
+        googlePictureUrl: 'https://pic/ana',
         avatarUrl: 'https://pic/ana',
         homeCity: null,
       });

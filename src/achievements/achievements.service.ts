@@ -1,4 +1,6 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { USER_DIRECTORY } from '../app-common/auth-user.js';
+import type { UserDirectory } from '../app-common/auth-user.js';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository } from 'typeorm';
 import type { AuthUser } from '../app-common/auth-user.js';
@@ -69,6 +71,7 @@ export class AchievementsService {
     @InjectRepository(TripPlace) private readonly places: Repository<TripPlace>,
     @InjectRepository(User) private readonly users: Repository<User>,
     @InjectRepository(TripJourneySkip) private readonly skips: Repository<TripJourneySkip>,
+    @Inject(USER_DIRECTORY) private readonly directory: UserDirectory,
     private readonly appTrips: AppTripsService,
     private readonly moments: MomentsService,
     private readonly destinations: DestinationResolver,
@@ -210,12 +213,9 @@ export class AchievementsService {
   private async skippers(tripId: string, rows: TripJourneySkip[]): Promise<Map<string, JourneyMember>> {
     const ids = [...new Set(rows.map((r) => r.skippedBy).filter((id): id is string => !!id))];
     if (ids.length === 0) return new Map();
-    const [users, members] = await Promise.all([
-      this.users.find({ where: { id: In(ids) } }),
-      this.members.find({ where: { tripId, userId: In(ids) } }),
-    ]);
+    const [profiles, members] = await Promise.all([this.directory.getProfiles(ids), this.members.find({ where: { tripId, userId: In(ids) } })]);
     const roles = new Map(members.map((m) => [m.userId, m.role]));
-    return new Map(users.map((u) => [u.id, { userId: u.id, displayName: u.displayName, avatarUrl: u.avatarUrl ?? null, role: roles.get(u.id) ?? null }]));
+    return new Map([...profiles.values()].map((p) => [p.id, { userId: p.id, displayName: p.displayName, avatarUrl: p.avatarUrl, role: roles.get(p.id) ?? null }]));
   }
 
   /** Re-checks one trip for all its current members (or only `onlyUserIds`). */

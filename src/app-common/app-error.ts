@@ -47,6 +47,8 @@ export const CONFLICT_REASONS = [
   'UPLOAD_MISMATCH',
   'MOMENT_DAY_LOCKED',
   'CHECKLIST_FULL',
+  'NO_GOOGLE_PICTURE',
+  'REQUEST_IN_PROGRESS',
 ] as const;
 export const FORBIDDEN_REASONS = ['REMOVED_FROM_TRIP', 'INVITE_OTHER_ACCOUNT', 'DEV_ACCOUNT_EMAIL_INVITE', 'NOT_CONVERSATION_AUTHOR'] as const;
 /** VALIDATION carries a reason only where the contract lists one. */
@@ -75,6 +77,8 @@ export type AppErrorOptions = {
   reason?: AppErrorReason;
   /** Extra top-level body fields the contract documents for this error (e.g. `resetsAt`, `limit`). */
   extra?: Record<string, string | number>;
+  /** An HTTP status other than the code's usual one, where the contract says so (an Idempotency-Key reused elsewhere → 422 VALIDATION). */
+  status?: number;
 };
 
 /** Throw from app API code; `AppExceptionFilter` turns it into the contract's error response. */

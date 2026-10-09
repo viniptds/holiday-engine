@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Trip } from '../trips/trip.entity.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { WizardModule } from '../wizard/wizard.module.js';
+import { IdempotencyModule } from '../idempotency/idempotency.module.js';
 import { TripMember } from './trip-member.entity.js';
 import { AppTripsController } from './app-trips.controller.js';
 import { AppTripsService } from './app-trips.service.js';
@@ -11,7 +12,7 @@ import { TripActivity } from './trip-activity.js';
 
 /** App trips. `AuthModule` provides `AuthGuard` and (through `UsersModule`) `USER_DIRECTORY`. */
 @Module({
-  imports: [TypeOrmModule.forFeature([Trip, TripMember]), AuthModule, WizardModule],
+  imports: [TypeOrmModule.forFeature([Trip, TripMember]), AuthModule, WizardModule, IdempotencyModule],
   controllers: [AppTripsController],
   providers: [AppTripsService, TripScheduleHooks, TripActivity],
   exports: [AppTripsService, TripScheduleHooks, TripActivity],

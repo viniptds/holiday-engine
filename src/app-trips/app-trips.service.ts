@@ -90,9 +90,11 @@ export class AppTripsService {
   }
 
   /** Owners and editors only. Omitted fields are kept; null clears the nullable ones. */
-  async update(user: AuthUser, tripId: string, data: UpdateAppTripDto, locale: Locale): Promise<AppTripDto> {
+  async update(user: AuthUser, tripId: string, data: UpdateAppTripDto, locale: Locale): Promise<AppTripDto & { overwroteNewer?: true }> {
     const membership = await this.requireMembership(user, tripId, ['owner', 'editor']);
     const trip = membership.trip!;
+    // Offline edits: did someone change the trip after the version this edit was based on?
+    const overwroteNewer = data.baseUpdatedAt !== undefined && new Date(trip.updatedAt).getTime() > Date.parse(data.baseUpdatedAt);
     const before = { startDate: trip.startDate, endDate: trip.endDate };
     if (data.destination !== undefined && data.destination !== trip.destination) {
       trip.destination = data.destination;
@@ -140,7 +142,7 @@ export class AppTripsService {
     }
     await this.activity?.emit({ type: 'trip.saved', tripId: trip.id, userId: user.id });
     const [dto] = await this.present([membership], locale);
-    return dto;
+    return overwroteNewer ? { ...dto, overwroteNewer: true } : dto;
   }
 
   /** Owner only. Members and suggested events go with the trip (ON DELETE CASCADE). */
