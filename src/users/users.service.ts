@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, QueryFailedError } from 'typeorm';
 import type { Repository } from 'typeorm';
@@ -6,6 +6,7 @@ import { AppError } from '../app-common/app-error.js';
 import type { UserDirectory, UserProfile } from '../app-common/auth-user.js';
 import { User } from './user.entity.js';
 import type { UpdateProfileDto } from './dto/update-profile.dto.js';
+import { AvatarUrls } from './avatar-urls.js';
 
 /** Verified claims of a Google ID token, as the users module needs them. */
 export type GoogleIdentity = { sub: string; email: string; name: string | null; picture: string | null };
@@ -24,7 +25,17 @@ const isUniqueViolation = (error: unknown) =>
 /** App users. Soft-deleted users are invisible to every method here. */
 @Injectable()
 export class UsersService implements UserDirectory {
-  constructor(@InjectRepository(User) private readonly users: Repository<User>) {}
+  constructor(
+    @InjectRepository(User) private readonly users: Repository<User>,
+    @Optional() private readonly avatars?: AvatarUrls,
+  ) {}
+
+  /** The picture to show: Google's or none from the column, a custom one as a signed URL (1 h). */
+  async avatarUrlOf(user: Pick<User, 'avatarSource' | 'avatarKey' | 'avatarUrl'>): Promise<string | null> {
+    if (user.avatarSource === 'custom') return user.avatarKey ? ((await this.avatars?.sign(user.avatarKey)) ?? null) : null;
+    if (user.avatarSource === 'none') return null;
+    return user.avatarUrl ?? null;
+  }
 
   /** The live user for this Google account, created on first sign-in. Email and avatar follow Google. */
   async findOrCreateFromGoogle(identity: GoogleIdentity): Promise<User> {
@@ -37,6 +48,8 @@ export class UsersService implements UserDirectory {
           googleSub: identity.sub,
           email: identity.email,
           displayName: displayNameFrom(identity),
+          avatarSource: 'google',
+          googlePictureUrl: identity.picture,
           avatarUrl: identity.picture,
           homeCity: null,
         }),
@@ -88,15 +101,22 @@ export class UsersService implements UserDirectory {
     if (unique.length === 0) return profiles;
     const users = await this.users.find({ where: { id: In(unique) } });
     for (const user of users) {
-      profiles.set(user.id, { id: user.id, displayName: user.displayName, avatarUrl: user.avatarUrl ?? null });
+      profiles.set(user.id, { id: user.id, displayName: user.displayName, avatarUrl: await this.avatarUrlOf(user) });
     }
     return profiles;
   }
 
+  /**
+   * Every Google sign-in refreshes the email and `googlePictureUrl`; the displayed picture follows
+   * Google only while the source is `google` (a custom or removed picture is never overridden).
+   */
   private async refreshFromGoogle(user: User, identity: GoogleIdentity): Promise<User> {
-    if (user.email === identity.email && user.avatarUrl === identity.picture) return user;
+    const source = user.avatarSource ?? 'google';
+    const shown = source === 'google' ? identity.picture : user.avatarUrl;
+    if (user.email === identity.email && user.googlePictureUrl === identity.picture && user.avatarUrl === shown) return user;
     user.email = identity.email;
-    user.avatarUrl = identity.picture;
+    user.googlePictureUrl = identity.picture;
+    user.avatarUrl = shown ?? null;
     return this.users.save(user);
   }
 }

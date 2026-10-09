@@ -12,8 +12,8 @@ async function run(direction: 'up' | 'down'): Promise<string[]> {
 }
 
 describe('AddNotificationsChecklist1761000000000', () => {
-  it('runs last', () => {
-    expect(migrations.at(-1)).toBe(AddNotificationsChecklist1761000000000);
+  it('runs after the moment days', () => {
+    expect(migrations.indexOf(AddNotificationsChecklist1761000000000)).toBe(migrations.findIndex((m) => m.name === 'AddMomentDays1760900000000') + 1);
   });
 
   it('creates the tables with the idempotency key and the entity checks', async () => {

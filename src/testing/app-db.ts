@@ -9,13 +9,14 @@ import { RefreshToken } from '../auth/refresh-token.entity.js';
 import { UserEntitlement } from '../billing/user-entitlement.entity.js';
 import { BillingEvent } from '../billing/billing-event.entity.js';
 import { InMemoryDb } from './in-memory-db.js';
+import { IdempotencyKey } from '../idempotency/idempotency-key.entity.js';
 
 export function appDb(): InMemoryDb {
   const tripRelation = { trip: { entity: Trip, column: 'tripId' } };
   return new InMemoryDb()
     .define(User, {
       primary: ['id'],
-      generate: () => ({ id: randomUUID(), createdAt: new Date(), updatedAt: new Date(), deletedAt: null, timezone: null, locale: null, notificationPrefs: null }),
+      generate: () => ({ id: randomUUID(), createdAt: new Date(), updatedAt: new Date(), deletedAt: null, timezone: null, locale: null, notificationPrefs: null, avatarSource: 'google', googlePictureUrl: null, avatarKey: null }),
       updateDate: 'updatedAt',
       deleteDate: 'deletedAt',
     })
@@ -51,6 +52,11 @@ export function appDb(): InMemoryDb {
       unique: [['tokenHash']],
       generate: () => ({ id: randomUUID(), createdAt: new Date(), acceptedBy: null, acceptedAt: null, revokedAt: null }),
       relations: tripRelation,
+    })
+    .define(IdempotencyKey, {
+      primary: ['userId', 'key'],
+      generate: () => ({ createdAt: new Date(), status: 0, responseBody: null }),
+      relations: { user: { entity: User, column: 'userId' } },
     })
     .define(TripRemoval, {
       primary: ['tripId', 'userId'],

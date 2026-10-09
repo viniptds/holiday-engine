@@ -27,7 +27,8 @@ export class MeController {
   /** The User plus fields other features register (billing: `plan`, `aiQuota`, `limits`). */
   @Get()
   async get(@CurrentUser() user: AuthUser, @RequestTimezone() timeZone: string): Promise<UserDto & Record<string, unknown>> {
-    const dto = toUserDto(await this.users.get(user.id));
+    const row = await this.users.get(user.id);
+    const dto = toUserDto(row, await this.users.avatarUrlOf(row));
     return { ...dto, ...(await this.extensions.fields({ user, timeZone, now: new Date() })) };
   }
 
@@ -37,7 +38,8 @@ export class MeController {
     @Body() body: UpdateProfileDto,
     @RequestTimezone() timeZone: string,
   ): Promise<UserDto & Record<string, unknown>> {
-    const dto = toUserDto(await this.users.update(user.id, body));
+    const row = await this.users.update(user.id, body);
+    const dto = toUserDto(row, await this.users.avatarUrlOf(row));
     return { ...dto, ...(await this.extensions.fields({ user, timeZone, now: new Date() })) };
   }
 

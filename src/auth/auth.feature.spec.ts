@@ -218,6 +218,8 @@ describe('App auth and profile (feature)', () => {
         email: 'ana@example.com',
         displayName: 'Ana Silva',
         avatarUrl: 'https://lh3.googleusercontent.com/a/ana',
+        avatarSource: 'google',
+        hasGooglePicture: true,
         homeCity: null,
         createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
       });

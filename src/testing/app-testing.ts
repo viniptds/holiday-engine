@@ -16,6 +16,7 @@ import { AccessTokenService } from '../auth/access-token.service.js';
 import { UserEntitlement } from '../billing/user-entitlement.entity.js';
 import { BillingEvent } from '../billing/billing-event.entity.js';
 import type { InMemoryDb } from './in-memory-db.js';
+import { IdempotencyKey } from '../idempotency/idempotency-key.entity.js';
 
 export const TEST_JWT_SECRET = 'test-jwt-secret-that-is-at-least-32-characters';
 
@@ -31,7 +32,7 @@ export function appTestingModule(db: InMemoryDb, imports: unknown[], config: Rec
       ...(imports as never[]),
     ],
   });
-  for (const entity of [User, RefreshToken, Trip, TripMember, TripInvite, TripRemoval, UserEntitlement, BillingEvent]) {
+  for (const entity of [User, RefreshToken, Trip, TripMember, TripInvite, TripRemoval, UserEntitlement, BillingEvent, IdempotencyKey]) {
     builder = builder.overrideProvider(getRepositoryToken(entity)).useValue(db.repository(entity as never));
   }
   return builder;

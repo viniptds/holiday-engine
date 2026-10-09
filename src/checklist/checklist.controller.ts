@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Put, UseFilters, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Put, UseFilters, UseGuards, UseInterceptors } from '@nestjs/common';
+import { IdempotencyInterceptor } from '../idempotency/idempotency.interceptor.js';
 import { APP_PREFIX } from '../app-common/auth-user.js';
 import type { AuthUser } from '../app-common/auth-user.js';
 import { AppExceptionFilter } from '../app-common/app-exception.filter.js';
@@ -25,17 +26,20 @@ export class ChecklistController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(IdempotencyInterceptor)
   create(@CurrentUser() user: AuthUser, @Param('tripId') tripId: string, @Body(appValidationPipe) body: CreateChecklistItemDto): Promise<ChecklistItemDto> {
     return this.checklist.create(user, tripId, body);
   }
 
   @Put('order')
+  @UseInterceptors(IdempotencyInterceptor)
   async order(@CurrentUser() user: AuthUser, @Param('tripId') tripId: string, @Body(appValidationPipe) body: ChecklistOrderDto): Promise<{ items: ChecklistItemDto[] }> {
     return { items: await this.checklist.order(user, tripId, body.itemIds) };
   }
 
   @Post('bulk')
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(IdempotencyInterceptor)
   async bulk(@CurrentUser() user: AuthUser, @Param('tripId') tripId: string, @Body(appValidationPipe) body: BulkChecklistDto): Promise<{ items: ChecklistItemDto[] }> {
     return { items: await this.checklist.bulk(user, tripId, body.items) };
   }
@@ -47,6 +51,7 @@ export class ChecklistController {
   }
 
   @Patch(':itemId')
+  @UseInterceptors(IdempotencyInterceptor)
   patch(
     @CurrentUser() user: AuthUser,
     @Param('tripId') tripId: string,
@@ -58,6 +63,7 @@ export class ChecklistController {
 
   @Delete(':itemId')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseInterceptors(IdempotencyInterceptor)
   async delete(@CurrentUser() user: AuthUser, @Param('tripId') tripId: string, @Param('itemId') itemId: string): Promise<void> {
     await this.checklist.delete(user, tripId, itemId);
   }

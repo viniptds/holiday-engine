@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseFilters, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseFilters, UseGuards, UseInterceptors } from '@nestjs/common';
+import { IdempotencyInterceptor } from '../idempotency/idempotency.interceptor.js';
 import { APP_PREFIX } from '../app-common/auth-user.js';
 import type { AuthUser } from '../app-common/auth-user.js';
 import { AppExceptionFilter } from '../app-common/app-exception.filter.js';
@@ -29,6 +30,7 @@ export class AppTripsController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(IdempotencyInterceptor)
   create(
     @CurrentUser() user: AuthUser,
     @Body(appValidationPipe) body: CreateAppTripDto,
@@ -43,12 +45,13 @@ export class AppTripsController {
   }
 
   @Patch(':id')
+  @UseInterceptors(IdempotencyInterceptor)
   update(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body(appValidationPipe) body: UpdateAppTripDto,
     @RequestLocale() locale: Locale,
-  ): Promise<AppTripDto> {
+  ): Promise<AppTripDto & { overwroteNewer?: true }> {
     return this.trips.update(user, id, body, locale);
   }
 

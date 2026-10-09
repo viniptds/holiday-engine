@@ -71,6 +71,6 @@ export class AuthService {
 
   private async session(user: User, refreshToken: string): Promise<AuthSession> {
     const access = await this.accessTokens.issue(user.id);
-    return { ...access, refreshToken, user: toUserDto(user) };
+    return { ...access, refreshToken, user: toUserDto(user, await this.users.avatarUrlOf(user)) };
   }
 }

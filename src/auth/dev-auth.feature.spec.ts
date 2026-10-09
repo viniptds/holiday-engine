@@ -121,6 +121,8 @@ describe('POST /app/v1/auth/dev (feature, dev only)', () => {
           email: 'ana.silva@example.com',
           displayName: 'ana.silva',
           avatarUrl: null,
+          avatarSource: 'google',
+          hasGooglePicture: false,
           homeCity: null,
           createdAt: expect.any(String),
         },

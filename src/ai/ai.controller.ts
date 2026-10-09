@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Put, Query, Res, UseFilters, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Put, Query, Res, UseFilters, UseGuards, UseInterceptors } from '@nestjs/common';
+import { IdempotencyInterceptor } from '../idempotency/idempotency.interceptor.js';
 import { APP_PREFIX } from '../app-common/auth-user.js';
 import type { AuthUser } from '../app-common/auth-user.js';
 import { AppExceptionFilter } from '../app-common/app-exception.filter.js';
@@ -144,6 +145,7 @@ export class TripPlacesController {
   }
 
   @Patch(':placeId')
+  @UseInterceptors(IdempotencyInterceptor)
   patch(
     @CurrentUser() user: AuthUser,
     @Param('tripId') tripId: string,
@@ -168,6 +170,7 @@ export class TripItineraryController {
   constructor(private readonly itinerary: ItineraryService) {}
 
   @Put()
+  @UseInterceptors(IdempotencyInterceptor)
   put(@CurrentUser() user: AuthUser, @Param('tripId') tripId: string, @Body(appValidationPipe) body: PutItineraryDto): Promise<ItineraryDto> {
     return this.itinerary.putItinerary(user, tripId, body);
   }

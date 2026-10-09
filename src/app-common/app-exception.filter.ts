@@ -28,11 +28,12 @@ export function toAppErrorBody(exception: unknown): { status: number; body: AppE
     if (exception.reason) body.reason = exception.reason;
     if (exception.fields) body.fields = exception.fields;
     const { retryAfterSeconds } = exception.options;
+    const status = exception.options.status ?? APP_ERROR_STATUS[exception.code];
     if (retryAfterSeconds !== undefined) {
       const seconds = String(Math.max(1, Math.ceil(retryAfterSeconds)));
-      return { status: APP_ERROR_STATUS[exception.code], body, headers: { 'Retry-After': seconds } };
+      return { status, body, headers: { 'Retry-After': seconds } };
     }
-    return { status: APP_ERROR_STATUS[exception.code], body };
+    return { status, body };
   }
   if (exception instanceof HttpException) {
     const code = CODE_BY_STATUS[exception.getStatus()];

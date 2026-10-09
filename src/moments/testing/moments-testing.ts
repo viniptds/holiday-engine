@@ -20,6 +20,7 @@ import { Notification, NotificationJob, PushTicket, PushToken } from '../../noti
 import { NotificationsModule } from '../../notifications/notifications.module.js';
 import { ChecklistItem, ChecklistReminder } from '../../checklist/checklist.entities.js';
 import { ChecklistModule } from '../../checklist/checklist.module.js';
+import { AvatarUpload } from '../avatar-upload.entity.js';
 import { Moment } from '../moment.entity.js';
 import { MomentsModule } from '../moments.module.js';
 import { OBJECT_STORAGE } from '../storage/object-storage.js';
@@ -63,6 +64,11 @@ export function momentsDb(): InMemoryDb {
       unique: [['userId', 'type', 'tripId', 'itemId', 'dueAt']],
       generate: () => ({ id: randomUUID(), createdAt: new Date(), status: 'pending', payload: null, sentAt: null, itemId: '' }),
       relations: { user: { entity: User, column: 'userId' }, trip: { entity: Trip, column: 'tripId' } },
+    })
+    .define(AvatarUpload, {
+      primary: ['id'],
+      generate: () => ({ createdAt: new Date(), status: 'pending' }),
+      relations: { user: { entity: User, column: 'userId' } },
     })
     .define(PushTicket, {
       primary: ['id'],
@@ -139,7 +145,7 @@ export function momentsTestingModule(db: InMemoryDb, config: Record<string, stri
     FREE_AI_MESSAGES_PER_DAY: '1000',
     ...config,
   });
-  for (const entity of [AiConversation, AiMessage, TripPlace, Moment, UserAchievement, TripJourneySkip, PushToken, Notification, NotificationJob, PushTicket, ChecklistItem, ChecklistReminder]) {
+  for (const entity of [AiConversation, AiMessage, TripPlace, Moment, UserAchievement, TripJourneySkip, PushToken, Notification, NotificationJob, PushTicket, ChecklistItem, ChecklistReminder, AvatarUpload]) {
     builder = builder.overrideProvider(getRepositoryToken(entity)).useValue(db.repository(entity as never));
   }
   if (storage) builder = builder.overrideProvider(OBJECT_STORAGE).useValue(storage);

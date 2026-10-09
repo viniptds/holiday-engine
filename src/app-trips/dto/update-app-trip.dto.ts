@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsIn,
   IsInt,
+  IsISO8601,
   IsNotEmpty,
   IsObject,
   IsOptional,
@@ -31,6 +32,14 @@ const IfPresent = () => ValidateIf((_, value) => value !== undefined);
  * are sent, and against the stored trip by `AppTripsService.update`.
  */
 export class UpdateAppTripDto {
+  /**
+   * Offline edits: the trip's `updatedAt` the client last saw. The change applies either way (last
+   * write wins); the response says `overwroteNewer: true` if the trip had changed since.
+   */
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  baseUpdatedAt?: string;
+
   @IfPresent()
   @Trim()
   @NoControlChars()
