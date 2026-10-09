@@ -42,12 +42,12 @@ export function momentsDb(): InMemoryDb {
 /** Object storage in memory: `put` simulates the client's upload; signed URLs are recognisable fakes. */
 export class MemoryObjectStorage implements ObjectStorage {
   readonly driver = 's3' as const;
-  readonly objects = new Map<string, StoredObject>();
+  readonly objects = new Map<string, StoredObject & { start?: Buffer }>();
   readonly deleted: string[] = [];
   failDeletes = false;
 
-  put(key: string, size: number, contentType: string | null = 'image/jpeg') {
-    this.objects.set(key, { size, contentType });
+  put(key: string, size: number, contentType: string | null = 'image/jpeg', start: Buffer = Buffer.from([0xff, 0xd8, 0xff, 0xe0])) {
+    this.objects.set(key, { size, contentType, start });
   }
 
   async presignUpload(key: string, file: { contentType: string; byteSize: number }, context: StorageRequestContext): Promise<PresignedUpload> {
@@ -64,7 +64,18 @@ export class MemoryObjectStorage implements ObjectStorage {
   }
 
   async stat(key: string): Promise<StoredObject | null> {
-    return this.objects.get(key) ?? null;
+    const object = this.objects.get(key);
+    return object ? { size: object.size, contentType: object.contentType } : null;
+  }
+
+  async readStart(key: string, length: number): Promise<Buffer | null> {
+    const object = this.objects.get(key);
+    return object ? (object.start ?? Buffer.alloc(0)).subarray(0, length) : null;
+  }
+
+  async setContentType(key: string, contentType: string): Promise<void> {
+    const object = this.objects.get(key);
+    if (object) object.contentType = contentType;
   }
 
   async delete(key: string): Promise<void> {

@@ -30,6 +30,13 @@ import { STORAGE_CONFIG } from './storage/storage.config.js';
 import type { StorageConfig } from './storage/storage.config.js';
 
 const ADVISORY_XACT_LOCK = 'SELECT pg_advisory_xact_lock(hashtext($1))';
+/** A JPEG's first bytes (SOI marker + the next marker's FF). */
+const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
+/** An error's name and message for logs; storage SDK errors never carry credentials in these. */
+const errorName = (error: unknown) => {
+  const e = error as { name?: string; message?: string };
+  return [e?.name, e?.message].filter(Boolean).join(': ').slice(0, 300) || 'unknown error';
+};
 const momentNotFound = () => new AppError('NOT_FOUND', 'Moment not found');
 const invalid = (fields: Record<string, string>) => new AppError('VALIDATION', 'Some fields are invalid', fields);
 /** Some time in the future is allowed for clock skew. */
@@ -107,8 +114,14 @@ export class MomentsService {
     if (moment.status === 'ready') return (await this.present([moment], user, context))[0];
     const object = await this.storage.stat(moment.objectKey);
     if (!object) throw conflict('UPLOAD_INCOMPLETE', 'The photo has not been uploaded yet');
-    const type = object.contentType?.split(';')[0].trim().toLowerCase() ?? null;
-    if (object.size !== moment.byteSize || type !== moment.contentType) {
+    const type = object.contentType?.split(';')[0].trim().toLowerCase() || null;
+    let accepted = object.size === moment.byteSize && type === moment.contentType;
+    if (!accepted && object.size === moment.byteSize && type === null && moment.contentType === 'image/jpeg') {
+      // Old app builds PUT without a Content-Type (before it was a signed header): accept a real
+      // JPEG of the declared size and fix the stored type.
+      accepted = await this.repairJpegType(moment);
+    }
+    if (!accepted) {
       await this.remove(moment);
       this.logger.warn(`Moment ${moment.id}: upload refused (size or type differs from the declared one)`);
       throw conflict('UPLOAD_MISMATCH', 'The uploaded photo does not match the declared size or type; start again');
@@ -218,13 +231,27 @@ export class MomentsService {
     }
   }
 
-  /** Row first, then the object (a failure there is logged: the row is what makes it visible). */
+  /** True if the object starts like a JPEG (FF D8 FF); its stored type is then set to image/jpeg. */
+  private async repairJpegType(moment: Moment): Promise<boolean> {
+    try {
+      const start = await this.storage.readStart(moment.objectKey, JPEG_MAGIC.length);
+      if (!start || !start.equals(JPEG_MAGIC)) return false;
+      await this.storage.setContentType(moment.objectKey, 'image/jpeg');
+      this.logger.log(`Moment ${moment.id}: uploaded without a Content-Type; JPEG confirmed and type fixed`);
+      return true;
+    } catch (error) {
+      this.logger.warn(`Moment ${moment.id}: checking an untyped upload failed (key ${moment.objectKey}): ${errorName(error)}`);
+      return false;
+    }
+  }
+
+  /** Row first, then the object, awaited (a failure there is logged with the key: the row is what makes it visible). */
   private async remove(moment: Moment): Promise<void> {
     await this.moments.delete({ id: moment.id });
     try {
       await this.storage.delete(moment.objectKey);
     } catch (error) {
-      this.logger.warn(`Moment ${moment.id}: deleting its object failed: ${(error as Error).message}`);
+      this.logger.warn(`Moment ${moment.id}: deleting its object failed (key ${moment.objectKey}): ${errorName(error)}`);
     }
   }
 

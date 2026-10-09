@@ -54,9 +54,13 @@ export function readStorageConfig(env: Env): StorageConfig {
     if (pathStyle !== 'true' && pathStyle !== 'false') throw new Error(`S3_FORCE_PATH_STYLE must be true or false (got "${pathStyle}")`);
     const endpoint = value(env, 'S3_ENDPOINT');
     if (endpoint && !/^https?:\/\//.test(endpoint)) throw new Error('S3_ENDPOINT must be an http(s) URL');
+    const region = value(env, 'S3_REGION') ?? 'auto';
+    if (!endpoint && region.toLowerCase() === 'auto') {
+      throw new Error("S3_REGION must be your bucket's AWS region (e.g. us-east-1) when S3_ENDPOINT is empty; 'auto' is for Cloudflare R2");
+    }
     s3 = {
       endpoint,
-      region: value(env, 'S3_REGION') ?? 'auto',
+      region,
       bucket: value(env, 'S3_BUCKET')!,
       accessKeyId: value(env, 'S3_ACCESS_KEY_ID')!,
       secretAccessKey: value(env, 'S3_SECRET_ACCESS_KEY')!,
