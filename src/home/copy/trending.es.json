@@ -3,32 +3,32 @@
     {
       "headline": "{destination}, el destino del momento",
       "subline": "Quienes viajan con nosotros lo están planeando ahora, y {month} es buena época.",
-      "plannerPrompt": "Quiero planear un viaje a {destination}."
+      "plannerPrompt": "Quiero planear un viaje. Destino: {destination}."
     },
     {
-      "headline": "Popular este mes: {destination}",
-      "subline": "Cada día aparecen más viajes a {destination} este mes.",
-      "plannerPrompt": "Quiero planear un viaje a {destination} pronto."
+      "headline": "De moda este mes: {destination}",
+      "subline": "Cada día aparecen más viajes a este destino.",
+      "plannerPrompt": "Quiero planear un viaje pronto. Destino: {destination}."
     },
     {
-      "headline": "{destination} está de moda ahora",
-      "subline": "Otras personas lo están planeando este mes; {month} es uno de sus mejores meses.",
-      "plannerPrompt": "Quiero planear un viaje a {destination} en {month}."
+      "headline": "{destination} está en tendencia",
+      "subline": "Más personas lo planean ahora, y {month} es uno de sus mejores meses.",
+      "plannerPrompt": "Quiero planear un viaje en {month}. Destino: {destination}."
     },
     {
-      "headline": "{destination}, popular este mes",
-      "subline": "Con {persona}, en un lugar que otras personas también están planeando.",
-      "plannerPrompt": "Quiero planear un viaje a {destination} a mi ritmo."
+      "headline": "{destination}, de moda este mes",
+      "subline": "Tiempo para {persona} en un lugar que mucha gente está descubriendo.",
+      "plannerPrompt": "Quiero planear un viaje a mi ritmo. Destino: {destination}."
     },
     {
-      "headline": "Lo que están planeando: {destination}",
-      "subline": "Una elección popular en {country}, y {month} es buena época allí.",
-      "plannerPrompt": "Quiero planear un viaje a {destination} en {month}."
+      "headline": "La elección del momento: {destination}",
+      "subline": "{country} está de moda, y {month} es una gran época para ir.",
+      "plannerPrompt": "Quiero planear un viaje en {month}. Destino: {destination}."
     },
     {
       "headline": "Sigue la tendencia: {destination}",
-      "subline": "Los viajes a {destination} crecieron este mes en Holid.ai.",
-      "plannerPrompt": "Quiero planear un viaje a {destination}."
+      "subline": "Los viajes a este destino crecieron este mes en Holid.ai.",
+      "plannerPrompt": "Quiero planear un viaje. Destino: {destination}."
     }
   ]
 }

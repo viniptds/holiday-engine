@@ -2,43 +2,43 @@
   "templates": [
     {
       "headline": "{holidayName}: {daysOff} días libres",
-      "subline": "{destination} está a {distanceKm} km, suficiente para cambiar de aire.",
-      "plannerPrompt": "Quiero planear un viaje de {daysOff} días a {destination} para el fin de semana largo de {holidayName}."
+      "subline": "{destination} está a {distanceKm} km, lo justo para cambiar de aire.",
+      "plannerPrompt": "Quiero planear un viaje de {daysOff} días aprovechando el fin de semana largo ({holidayName}). Destino: {destination}."
     },
     {
-      "headline": "{destination} para {holidayName}",
-      "subline": "{daysOff} días libres y {distanceKm} km, vuelo corto o carretera larga.",
-      "plannerPrompt": "Quiero planear {daysOff} días en {destination} para {holidayName}."
+      "headline": "Escapada larga: {destination}",
+      "subline": "{daysOff} días libres a {distanceKm} km: vuelo corto o carretera tranquila.",
+      "plannerPrompt": "Quiero planear {daysOff} días de viaje en el fin de semana largo ({holidayName}). Destino: {destination}."
     },
     {
-      "headline": "Fin de semana largo en {destination}",
-      "subline": "{holidayName} te da {daysOff} días, y {destination} está a {distanceKm} km.",
-      "plannerPrompt": "Quiero planear un fin de semana largo de {daysOff} días en {destination}."
+      "headline": "Fin de semana largo: {destination}",
+      "subline": "{holidayName} te regala {daysOff} días, y el destino queda a {distanceKm} km.",
+      "plannerPrompt": "Quiero planear un fin de semana largo de {daysOff} días. Destino: {destination}."
     },
     {
       "headline": "{destination}, {daysOff} días en {month}",
-      "subline": "El fin de semana de {holidayName}, a {distanceKm} km de casa, con {persona}.",
-      "plannerPrompt": "Quiero planear {daysOff} días en {destination} para {holidayName}, en {month}."
+      "subline": "Con {holidayName}, tienes {daysOff} días libres y tiempo para {persona}.",
+      "plannerPrompt": "Quiero planear {daysOff} días en {month}, aprovechando el feriado ({holidayName}). Destino: {destination}."
     },
     {
-      "headline": "Estira el feriado en {destination}",
-      "subline": "{daysOff} días libres, {distanceKm} km, y vuelves a tiempo al trabajo.",
-      "plannerPrompt": "Quiero planear un viaje de {daysOff} días a {destination} en un fin de semana largo."
+      "headline": "Estira el feriado: {destination}",
+      "subline": "{daysOff} días libres y {distanceKm} km: vuelves con tiempo para el lunes.",
+      "plannerPrompt": "Quiero planear un viaje de {daysOff} días en un fin de semana largo. Destino: {destination}."
     },
     {
-      "headline": "{destination}, fin de semana largo",
-      "subline": "Pide el viernes: {daysOff} días, {distanceKm} km y {destination} en {month}.",
-      "plannerPrompt": "Quiero planear un viaje de {daysOff} días a {destination} en {month}, pidiendo el viernes libre."
+      "headline": "Pide el viernes: {destination}",
+      "subline": "Un fin de semana largo en {month}: {daysOff} días a {distanceKm} km.",
+      "plannerPrompt": "Quiero planear un viaje de {daysOff} días en {month}, pidiendo el viernes libre. Destino: {destination}."
     },
     {
-      "headline": "{daysOff} días en {destination}",
-      "subline": "A {distanceKm} km de ti y {daysOff} días para disfrutar en {month}.",
-      "plannerPrompt": "Quiero planear {daysOff} días en {destination} en {month}."
+      "headline": "{destination} en {daysOff} días",
+      "subline": "A {distanceKm} km de ti, {daysOff} días bien aprovechados en {month}.",
+      "plannerPrompt": "Quiero planear {daysOff} días de viaje en {month}. Destino: {destination}."
     },
     {
-      "headline": "{holidayName} en {destination}",
+      "headline": "{holidayName}: {destination}",
       "subline": "{daysOff} días, {distanceKm} km y tiempo para {persona}.",
-      "plannerPrompt": "Quiero planear el fin de semana largo de {holidayName} en {destination}, {daysOff} días."
+      "plannerPrompt": "Quiero planear {daysOff} días de viaje en el feriado ({holidayName}). Destino: {destination}."
     }
   ]
 }

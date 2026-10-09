@@ -137,8 +137,8 @@ export const EYEBROWS: Record<BannerTier, Record<Locale, string>> = {
 export const CTA: Record<Locale, string> = { en: 'Start planning', 'pt-BR': 'Começar a planejar', es: 'Empezar a planear' };
 
 /**
- * What `{persona}` reads as: a noun phrase that fits "your kind of {persona}" / "com {persona}" /
- * "con {persona}", by persona key (`wizard/questions.json`).
+ * What `{persona}` reads as: a noun phrase that fits "your kind of {persona}" / "tempo para {persona}" /
+ * "tiempo para {persona}", by persona key (`wizard/questions.json`).
  */
 export const PERSONA_PHRASES: Record<string, Record<Locale, string>> = {
   relaxer: { en: 'slow mornings', 'pt-BR': 'manhãs sem pressa', es: 'mañanas sin prisa' },

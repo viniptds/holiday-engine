@@ -2,43 +2,43 @@
   "templates": [
     {
       "headline": "{destination} en las próximas dos semanas",
-      "subline": "A {distanceKm} km de ti, {tempC} °C hoy, con {persona}.",
-      "plannerPrompt": "Quiero planear un viaje corto a {destination} en las próximas dos semanas."
+      "subline": "A {distanceKm} km de ti, {tempC} °C hoy y tiempo para {persona}.",
+      "plannerPrompt": "Quiero planear un viaje corto en las próximas dos semanas. Destino: {destination}."
     },
     {
-      "headline": "Una escapada rápida a {destination}",
-      "subline": "Solo a {distanceKm} km y {tempC} °C esta tarde.",
-      "plannerPrompt": "Quiero planear una escapada rápida a {destination} en las próximas dos semanas."
+      "headline": "Escapada rápida: {destination}",
+      "subline": "Solo a {distanceKm} km y {tempC} °C ahora. Puedes ir sin complicarte.",
+      "plannerPrompt": "Quiero planear una escapada rápida en las próximas dos semanas. Destino: {destination}."
     },
     {
-      "headline": "{destination} mientras hace {tempC} °C",
+      "headline": "{destination}: {tempC} °C ahora",
       "subline": "A {distanceKm} km, un fin de semana sin maratón de planificación.",
-      "plannerPrompt": "Quiero planear un fin de semana en {destination} en los próximos 15 días."
+      "plannerPrompt": "Quiero planear un fin de semana en los próximos 15 días. Destino: {destination}."
     },
     {
-      "headline": "{destination} antes de fin de mes",
-      "subline": "A {distanceKm} km de casa, dos noches bastan para respirar.",
-      "plannerPrompt": "Quiero planear dos noches en {destination} antes de fin de mes."
+      "headline": "Antes de fin de mes: {destination}",
+      "subline": "A {distanceKm} km de casa, dos noches bastan para recargar.",
+      "plannerPrompt": "Quiero planear un viaje de dos noches antes de fin de mes. Destino: {destination}."
     },
     {
-      "headline": "Dos noches en {destination}",
-      "subline": "A {distanceKm} km de ti, {tempC} °C y desayuno sin hora el sábado.",
-      "plannerPrompt": "Quiero planear dos noches en {destination} pronto."
+      "headline": "Dos noches fuera: {destination}",
+      "subline": "A {distanceKm} km de ti, {tempC} °C y desayuno sin prisa el sábado.",
+      "plannerPrompt": "Quiero planear dos noches de viaje pronto. Destino: {destination}."
     },
     {
-      "headline": "{destination}, a un paso de ti",
-      "subline": "A {distanceKm} km de tu puerta y en buena época: {month}.",
-      "plannerPrompt": "Quiero planear un viaje corto a {destination} en {month}."
+      "headline": "{destination}, más cerca de lo esperado",
+      "subline": "A {distanceKm} km de tu puerta, y {month} es buena época para ir.",
+      "plannerPrompt": "Quiero planear un viaje corto en {month}. Destino: {destination}."
     },
     {
-      "headline": "{destination} este fin de semana",
-      "subline": "A {distanceKm} km, {tempC} °C hoy y {persona} todo el fin de semana.",
-      "plannerPrompt": "Quiero planear un viaje a {destination} este fin de semana."
+      "headline": "Este fin de semana: {destination}",
+      "subline": "A {distanceKm} km, {tempC} °C hoy y tiempo para {persona}.",
+      "plannerPrompt": "Quiero planear un viaje para este fin de semana. Destino: {destination}."
     },
     {
-      "headline": "Un fin de semana en {destination}",
-      "subline": "Sales el viernes, vuelves el domingo por la noche, {distanceKm} km por trayecto.",
-      "plannerPrompt": "Quiero planear un viaje de viernes a domingo a {destination}."
+      "headline": "De viernes a domingo: {destination}",
+      "subline": "Sales el viernes y vuelves el domingo, a {distanceKm} km de casa.",
+      "plannerPrompt": "Quiero planear un viaje de viernes a domingo. Destino: {destination}."
     }
   ]
 }
