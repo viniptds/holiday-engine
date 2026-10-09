@@ -25,6 +25,16 @@ export class TtlLru<K, V> {
     return entry.value;
   }
 
+  clear(): void {
+    this.entries.clear();
+  }
+
+  /** The live values, least recently used first. */
+  values(): V[] {
+    const now = this.now();
+    return [...this.entries.values()].filter((e) => e.expiresAt > now).map((e) => e.value);
+  }
+
   set(key: K, value: V): void {
     this.entries.delete(key);
     while (this.entries.size >= this.max) this.entries.delete(this.entries.keys().next().value as K);

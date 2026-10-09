@@ -31,6 +31,11 @@ export class MediaService {
 
   async city(user: AuthUser, query: string, count: number, size: PhotoSize): Promise<PhotoDto[]> {
     this.rate.take(user.id);
+    return this.cityPhotos(query, count, size);
+  }
+
+  /** City photos for the engine's own use (Home banners): the same caches, no per-user rate limit. */
+  async cityPhotos(query: string, count: number, size: PhotoSize): Promise<PhotoDto[]> {
     const refs = await this.list(`city:${normalizeName(query)}`, () => this.source.cityPhotos(query.trim()), 'city');
     return this.resolve(refs.slice(0, count), PHOTO_WIDTHS[size]);
   }

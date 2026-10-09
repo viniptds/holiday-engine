@@ -1,0 +1,58 @@
+{
+  "templates": [
+    {
+      "angle": "family",
+      "headline": "{destination} com todo mundo, em {month}",
+      "subline": "Dias tranquilos e espaço para todas as idades: {country} em {month}.",
+      "plannerPrompt": "Quero planejar uma viagem em família para {destination} em {month}, no ritmo de todo mundo."
+    },
+    {
+      "angle": "family",
+      "headline": "{destination}, o {month} da família",
+      "subline": "Uma base só, passeios curtos e ninguém apressando ninguém.",
+      "plannerPrompt": "Quero planejar uma viagem tranquila em família para {destination} em {month}, com uma base só."
+    },
+    {
+      "angle": "family",
+      "headline": "{destination}, a turma toda",
+      "subline": "Vá em {month}: tempo de sobra para passagens e uma mesa grande.",
+      "plannerPrompt": "Quero planejar uma viagem para {destination} em {month} com a família toda."
+    },
+    {
+      "angle": "business",
+      "headline": "{destination}, uns dias entre reuniões",
+      "subline": "Some um fim de semana à viagem de trabalho e conheça {country} de verdade.",
+      "plannerPrompt": "Quero planejar uma viagem de trabalho para {destination} em {month}, com um fim de semana livre."
+    },
+    {
+      "angle": "business",
+      "headline": "{destination}: reunião feita, fique mais",
+      "subline": "Voos bons, centro a pé e noites de {month} que valem ficar.",
+      "plannerPrompt": "Quero planejar uma viagem de trabalho para {destination} em {month} e ficar o fim de semana."
+    },
+    {
+      "angle": "business",
+      "headline": "{destination} depois da última reunião",
+      "subline": "Duas noites extras em {month} transformam viagem de trabalho em viagem de verdade.",
+      "plannerPrompt": "Quero planejar duas noites extras para {destination} depois de reuniões em {month}."
+    },
+    {
+      "angle": "explorer",
+      "headline": "{route} numa viagem só",
+      "subline": "Várias paradas, {month} a seu favor e o seu ritmo.",
+      "plannerPrompt": "Quero planejar uma viagem por várias cidades passando por {route} em {month}."
+    },
+    {
+      "angle": "explorer",
+      "headline": "{route}: seu {month} em movimento",
+      "subline": "{destination} é o começo; siga em frente e deixe os dias decidirem.",
+      "plannerPrompt": "Quero planejar um roteiro por {route} em {month}, começando por {destination}."
+    },
+    {
+      "angle": "explorer",
+      "headline": "{route}, com {persona}",
+      "subline": "Um roteiro de {month} no ritmo que combina com você.",
+      "plannerPrompt": "Quero planejar um roteiro por {route} em {month} no meu ritmo."
+    }
+  ]
+}

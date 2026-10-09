@@ -4,6 +4,6 @@
   "sourceRoot": "src",
   "compilerOptions": {
     "deleteOutDir": true,
-    "assets": [{ "include": "wizard/*.json", "outDir": "dist" }]
+    "assets": [{ "include": "wizard/*.json", "outDir": "dist" }, { "include": "home/**/*.json", "outDir": "dist" }]
   }
 }

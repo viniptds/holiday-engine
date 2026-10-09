@@ -1,0 +1,44 @@
+{
+  "templates": [
+    {
+      "headline": "{destination} in the next two weeks",
+      "subline": "{distanceKm} km from you, {tempC} °C today, your kind of {persona}.",
+      "plannerPrompt": "Plan a short trip to {destination} within the next two weeks."
+    },
+    {
+      "headline": "A quick escape to {destination}",
+      "subline": "Only {distanceKm} km from you, and {tempC} °C this afternoon.",
+      "plannerPrompt": "Plan a quick getaway to {destination} in the next two weeks."
+    },
+    {
+      "headline": "{destination} while it's {tempC} °C",
+      "subline": "{distanceKm} km away, a weekend that needs no planning marathon.",
+      "plannerPrompt": "Plan a weekend in {destination} within the next 15 days."
+    },
+    {
+      "headline": "{destination} before the month ends",
+      "subline": "{distanceKm} km from home, two nights are enough to breathe.",
+      "plannerPrompt": "Plan two nights in {destination} before the end of the month."
+    },
+    {
+      "headline": "Two nights in {destination}",
+      "subline": "{distanceKm} km from you, {tempC} °C, and a late Saturday breakfast.",
+      "plannerPrompt": "Plan two nights in {destination} soon."
+    },
+    {
+      "headline": "{destination}, closer than you think",
+      "subline": "{distanceKm} km from your door, and {month} is a good month there.",
+      "plannerPrompt": "Plan a short trip to {destination} in {month}."
+    },
+    {
+      "headline": "{destination} this weekend",
+      "subline": "{distanceKm} km away, {tempC} °C today, and {persona} all weekend.",
+      "plannerPrompt": "Plan a trip to {destination} this weekend."
+    },
+    {
+      "headline": "{destination} on a free weekend",
+      "subline": "Leave Friday, back by Sunday evening, {distanceKm} km each way.",
+      "plannerPrompt": "Plan a Friday-to-Sunday trip to {destination}."
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "templates": [
+    {
+      "headline": "{destination}, where travelers are heading",
+      "subline": "Travelers here are planning it right now, and {month} suits {country}.",
+      "plannerPrompt": "Plan a trip to {destination}."
+    },
+    {
+      "headline": "Popular this month: {destination}",
+      "subline": "New trips to {destination} keep appearing on Holid.ai this month.",
+      "plannerPrompt": "Plan a trip to {destination} soon."
+    },
+    {
+      "headline": "{destination} is trending right now",
+      "subline": "Other travelers are planning it this month; {month} is one of its best.",
+      "plannerPrompt": "Plan a trip to {destination} in {month}."
+    },
+    {
+      "headline": "{destination}, popular this month",
+      "subline": "Your kind of {persona}, in a place others are planning too.",
+      "plannerPrompt": "Plan a trip to {destination} at my own pace."
+    },
+    {
+      "headline": "What travelers are planning: {destination}",
+      "subline": "A popular pick in {country}, and {month} is a good time there.",
+      "plannerPrompt": "Plan a trip to {destination} in {month}."
+    },
+    {
+      "headline": "Join the trend: {destination}",
+      "subline": "Trips to {destination} are up this month across Holid.ai.",
+      "plannerPrompt": "Plan a trip to {destination}."
+    }
+  ]
+}

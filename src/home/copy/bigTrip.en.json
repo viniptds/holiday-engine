@@ -1,0 +1,58 @@
+{
+  "templates": [
+    {
+      "angle": "family",
+      "headline": "{destination} with everyone, in {month}",
+      "subline": "Easy days and room for every age, {month} in {country}.",
+      "plannerPrompt": "Plan a family trip to {destination} in {month}, with everyone's pace in mind."
+    },
+    {
+      "angle": "family",
+      "headline": "The family's {month} in {destination}",
+      "subline": "One base, short days out and nobody rushing anyone.",
+      "plannerPrompt": "Plan a relaxed family trip to {destination} in {month} from one base."
+    },
+    {
+      "angle": "family",
+      "headline": "{destination}, the whole crew",
+      "subline": "Go in {month}: time enough to book flights and a table for all.",
+      "plannerPrompt": "Plan a trip to {destination} in {month} with the whole family."
+    },
+    {
+      "angle": "business",
+      "headline": "{destination}, a few days around meetings",
+      "subline": "Add a weekend to the work trip and see {country} properly.",
+      "plannerPrompt": "Plan a few days in {destination} in {month} around work meetings, with a free weekend."
+    },
+    {
+      "angle": "business",
+      "headline": "Work in {destination}, stay the weekend",
+      "subline": "Good flights, a walkable centre, and {month} evenings worth staying for.",
+      "plannerPrompt": "Plan a work trip to {destination} in {month} and stay the weekend."
+    },
+    {
+      "angle": "business",
+      "headline": "{destination} after the last meeting",
+      "subline": "Two extra nights in {month} turn a work trip into a real one.",
+      "plannerPrompt": "Plan two extra nights in {destination} after meetings in {month}."
+    },
+    {
+      "angle": "explorer",
+      "headline": "{route} in one trip",
+      "subline": "Several stops across {country}, {month} on your side, your own pace.",
+      "plannerPrompt": "Plan a multi-city trip through {route} in {month}."
+    },
+    {
+      "angle": "explorer",
+      "headline": "{month} across {country}: {route}",
+      "subline": "Start in {destination}, keep moving, and let the days decide the order.",
+      "plannerPrompt": "Plan a route through {route} in {month}, starting in {destination}."
+    },
+    {
+      "angle": "explorer",
+      "headline": "{route}, your kind of {persona}",
+      "subline": "A {month} route through {country} at the pace that suits you.",
+      "plannerPrompt": "Plan a route through {route} in {month} at my own pace."
+    }
+  ]
+}

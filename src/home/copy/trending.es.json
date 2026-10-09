@@ -1,0 +1,34 @@
+{
+  "templates": [
+    {
+      "headline": "{destination}, el destino del momento",
+      "subline": "Quienes viajan con nosotros lo están planeando ahora, y {month} es buena época.",
+      "plannerPrompt": "Quiero planear un viaje a {destination}."
+    },
+    {
+      "headline": "Popular este mes: {destination}",
+      "subline": "Cada día aparecen más viajes a {destination} este mes.",
+      "plannerPrompt": "Quiero planear un viaje a {destination} pronto."
+    },
+    {
+      "headline": "{destination} está de moda ahora",
+      "subline": "Otras personas lo están planeando este mes; {month} es uno de sus mejores meses.",
+      "plannerPrompt": "Quiero planear un viaje a {destination} en {month}."
+    },
+    {
+      "headline": "{destination}, popular este mes",
+      "subline": "Con {persona}, en un lugar que otras personas también están planeando.",
+      "plannerPrompt": "Quiero planear un viaje a {destination} a mi ritmo."
+    },
+    {
+      "headline": "Lo que están planeando: {destination}",
+      "subline": "Una elección popular en {country}, y {month} es buena época allí.",
+      "plannerPrompt": "Quiero planear un viaje a {destination} en {month}."
+    },
+    {
+      "headline": "Sigue la tendencia: {destination}",
+      "subline": "Los viajes a {destination} crecieron este mes en Holid.ai.",
+      "plannerPrompt": "Quiero planear un viaje a {destination}."
+    }
+  ]
+}

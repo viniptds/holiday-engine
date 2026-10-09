@@ -1,0 +1,2910 @@
+{
+  "destinations": [
+    {
+      "id": "rio-de-janeiro",
+      "names": {
+        "en": "Rio de Janeiro",
+        "pt-BR": "Rio de Janeiro",
+        "es": "Río de Janeiro"
+      },
+      "country": "BR",
+      "aliases": [
+        "rio",
+        "rio de janeiro",
+        "rj"
+      ],
+      "tags": [
+        "beach",
+        "city",
+        "nightlife",
+        "nature"
+      ],
+      "bestMonths": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "salvador",
+        "florianopolis",
+        "cartagena"
+      ],
+      "popularity": 5,
+      "lat": -22.91,
+      "lng": -43.17,
+      "kind": "city"
+    },
+    {
+      "id": "sao-paulo",
+      "names": {
+        "en": "São Paulo",
+        "pt-BR": "São Paulo",
+        "es": "São Paulo"
+      },
+      "country": "BR",
+      "aliases": [
+        "sao paulo",
+        "sp",
+        "sampa"
+      ],
+      "tags": [
+        "city",
+        "food",
+        "nightlife",
+        "culture"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "buenos-aires",
+        "mexico-city",
+        "new-york"
+      ],
+      "popularity": 4,
+      "lat": -23.55,
+      "lng": -46.63,
+      "kind": "city"
+    },
+    {
+      "id": "salvador",
+      "names": {
+        "en": "Salvador",
+        "pt-BR": "Salvador",
+        "es": "Salvador de Bahía"
+      },
+      "country": "BR",
+      "aliases": [
+        "salvador da bahia",
+        "salvador bahia"
+      ],
+      "tags": [
+        "beach",
+        "culture",
+        "food"
+      ],
+      "bestMonths": [
+        1,
+        9,
+        10,
+        11,
+        12
+      ],
+      "similar": [
+        "rio-de-janeiro",
+        "maceio",
+        "cartagena"
+      ],
+      "popularity": 4,
+      "lat": -12.97,
+      "lng": -38.51,
+      "kind": "city"
+    },
+    {
+      "id": "florianopolis",
+      "names": {
+        "en": "Florianópolis",
+        "pt-BR": "Florianópolis",
+        "es": "Florianópolis"
+      },
+      "country": "BR",
+      "aliases": [
+        "floripa"
+      ],
+      "tags": [
+        "beach",
+        "nature",
+        "nightlife"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        12
+      ],
+      "similar": [
+        "rio-de-janeiro",
+        "punta-del-este",
+        "porto-de-galinhas"
+      ],
+      "popularity": 4,
+      "lat": -27.59,
+      "lng": -48.55,
+      "kind": "island"
+    },
+    {
+      "id": "fernando-de-noronha",
+      "names": {
+        "en": "Fernando de Noronha",
+        "pt-BR": "Fernando de Noronha",
+        "es": "Fernando de Noronha"
+      },
+      "country": "BR",
+      "aliases": [
+        "noronha"
+      ],
+      "tags": [
+        "beach",
+        "nature",
+        "adventure"
+      ],
+      "bestMonths": [
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "similar": [
+        "maldives",
+        "galapagos",
+        "jericoacoara"
+      ],
+      "popularity": 3,
+      "lat": -3.85,
+      "lng": -32.42,
+      "kind": "island"
+    },
+    {
+      "id": "gramado",
+      "names": {
+        "en": "Gramado",
+        "pt-BR": "Gramado",
+        "es": "Gramado"
+      },
+      "country": "BR",
+      "aliases": [
+        "gramado e canela",
+        "canela"
+      ],
+      "tags": [
+        "relax",
+        "food",
+        "family"
+      ],
+      "bestMonths": [
+        5,
+        6,
+        7,
+        8,
+        12
+      ],
+      "similar": [
+        "bariloche",
+        "mendoza",
+        "swiss-alps"
+      ],
+      "popularity": 4,
+      "lat": -29.38,
+      "lng": -50.87,
+      "kind": "city"
+    },
+    {
+      "id": "foz-do-iguacu",
+      "names": {
+        "en": "Foz do Iguaçu",
+        "pt-BR": "Foz do Iguaçu",
+        "es": "Foz de Iguazú"
+      },
+      "country": "BR",
+      "aliases": [
+        "iguacu",
+        "iguazu",
+        "cataratas do iguacu",
+        "iguazu falls",
+        "iguassu falls",
+        "puerto iguazu"
+      ],
+      "tags": [
+        "nature",
+        "adventure",
+        "family"
+      ],
+      "bestMonths": [
+        3,
+        4,
+        5,
+        8,
+        9,
+        10
+      ],
+      "similar": [
+        "bonito",
+        "chapada-diamantina",
+        "uyuni"
+      ],
+      "popularity": 4,
+      "lat": -25.55,
+      "lng": -54.59,
+      "kind": "city"
+    },
+    {
+      "id": "bonito",
+      "names": {
+        "en": "Bonito",
+        "pt-BR": "Bonito",
+        "es": "Bonito"
+      },
+      "country": "BR",
+      "aliases": [
+        "bonito ms"
+      ],
+      "tags": [
+        "nature",
+        "adventure",
+        "family"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "foz-do-iguacu",
+        "chapada-diamantina",
+        "lencois-maranhenses"
+      ],
+      "popularity": 3,
+      "lat": -21.13,
+      "lng": -56.48,
+      "kind": "region"
+    },
+    {
+      "id": "jericoacoara",
+      "names": {
+        "en": "Jericoacoara",
+        "pt-BR": "Jericoacoara",
+        "es": "Jericoacoara"
+      },
+      "country": "BR",
+      "aliases": [
+        "jeri",
+        "jijoca"
+      ],
+      "tags": [
+        "beach",
+        "adventure",
+        "relax"
+      ],
+      "bestMonths": [
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "similar": [
+        "lencois-maranhenses",
+        "fernando-de-noronha",
+        "tulum"
+      ],
+      "popularity": 3,
+      "lat": -2.8,
+      "lng": -40.51,
+      "kind": "region"
+    },
+    {
+      "id": "porto-de-galinhas",
+      "names": {
+        "en": "Porto de Galinhas",
+        "pt-BR": "Porto de Galinhas",
+        "es": "Porto de Galinhas"
+      },
+      "country": "BR",
+      "aliases": [
+        "ipojuca"
+      ],
+      "tags": [
+        "beach",
+        "family",
+        "relax"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        9,
+        10,
+        11,
+        12
+      ],
+      "similar": [
+        "maceio",
+        "punta-cana",
+        "florianopolis"
+      ],
+      "popularity": 3,
+      "lat": -8.51,
+      "lng": -35.0,
+      "kind": "region"
+    },
+    {
+      "id": "maceio",
+      "names": {
+        "en": "Maceió",
+        "pt-BR": "Maceió",
+        "es": "Maceió"
+      },
+      "country": "BR",
+      "aliases": [
+        "maragogi"
+      ],
+      "tags": [
+        "beach",
+        "family",
+        "relax"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        9,
+        10,
+        11,
+        12
+      ],
+      "similar": [
+        "porto-de-galinhas",
+        "salvador",
+        "aruba"
+      ],
+      "popularity": 4,
+      "lat": -9.67,
+      "lng": -35.74,
+      "kind": "city"
+    },
+    {
+      "id": "lencois-maranhenses",
+      "names": {
+        "en": "Lençóis Maranhenses",
+        "pt-BR": "Lençóis Maranhenses",
+        "es": "Lençóis Maranhenses"
+      },
+      "country": "BR",
+      "aliases": [
+        "lencois",
+        "barreirinhas"
+      ],
+      "tags": [
+        "nature",
+        "adventure"
+      ],
+      "bestMonths": [
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "jericoacoara",
+        "atacama",
+        "bonito"
+      ],
+      "popularity": 3,
+      "lat": -2.49,
+      "lng": -43.13,
+      "kind": "region"
+    },
+    {
+      "id": "chapada-diamantina",
+      "names": {
+        "en": "Chapada Diamantina",
+        "pt-BR": "Chapada Diamantina",
+        "es": "Chapada Diamantina"
+      },
+      "country": "BR",
+      "aliases": [
+        "lencois bahia"
+      ],
+      "tags": [
+        "nature",
+        "adventure"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "bonito",
+        "foz-do-iguacu",
+        "torres-del-paine"
+      ],
+      "popularity": 2,
+      "lat": -12.56,
+      "lng": -41.39,
+      "kind": "region"
+    },
+    {
+      "id": "natal",
+      "names": {
+        "en": "Natal",
+        "pt-BR": "Natal",
+        "es": "Natal"
+      },
+      "country": "BR",
+      "aliases": [
+        "pipa",
+        "praia da pipa"
+      ],
+      "tags": [
+        "beach",
+        "family",
+        "adventure"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        9,
+        10,
+        11,
+        12
+      ],
+      "similar": [
+        "jericoacoara",
+        "maceio",
+        "porto-de-galinhas"
+      ],
+      "popularity": 3,
+      "lat": -5.79,
+      "lng": -35.21,
+      "kind": "city"
+    },
+    {
+      "id": "buenos-aires",
+      "names": {
+        "en": "Buenos Aires",
+        "pt-BR": "Buenos Aires",
+        "es": "Buenos Aires"
+      },
+      "country": "AR",
+      "aliases": [
+        "bsas",
+        "baires",
+        "caba"
+      ],
+      "tags": [
+        "city",
+        "food",
+        "culture",
+        "nightlife"
+      ],
+      "bestMonths": [
+        3,
+        4,
+        5,
+        9,
+        10,
+        11
+      ],
+      "similar": [
+        "sao-paulo",
+        "montevideo",
+        "madrid"
+      ],
+      "popularity": 5,
+      "lat": -34.6,
+      "lng": -58.38,
+      "kind": "city"
+    },
+    {
+      "id": "bariloche",
+      "names": {
+        "en": "Bariloche",
+        "pt-BR": "Bariloche",
+        "es": "Bariloche"
+      },
+      "country": "AR",
+      "aliases": [
+        "san carlos de bariloche"
+      ],
+      "tags": [
+        "nature",
+        "adventure",
+        "family"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        7,
+        8,
+        12
+      ],
+      "similar": [
+        "gramado",
+        "ushuaia",
+        "swiss-alps"
+      ],
+      "popularity": 4,
+      "lat": -41.13,
+      "lng": -71.31,
+      "kind": "city"
+    },
+    {
+      "id": "mendoza",
+      "names": {
+        "en": "Mendoza",
+        "pt-BR": "Mendoza",
+        "es": "Mendoza"
+      },
+      "country": "AR",
+      "aliases": [
+        "mendoza"
+      ],
+      "tags": [
+        "food",
+        "nature",
+        "relax"
+      ],
+      "bestMonths": [
+        3,
+        4,
+        10,
+        11
+      ],
+      "similar": [
+        "santiago",
+        "salta",
+        "gramado"
+      ],
+      "popularity": 3,
+      "lat": -32.89,
+      "lng": -68.83,
+      "kind": "city"
+    },
+    {
+      "id": "ushuaia",
+      "names": {
+        "en": "Ushuaia",
+        "pt-BR": "Ushuaia",
+        "es": "Ushuaia"
+      },
+      "country": "AR",
+      "aliases": [
+        "tierra del fuego",
+        "terra do fogo"
+      ],
+      "tags": [
+        "nature",
+        "adventure"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        12
+      ],
+      "similar": [
+        "el-calafate",
+        "torres-del-paine",
+        "reykjavik"
+      ],
+      "popularity": 3,
+      "lat": -54.8,
+      "lng": -68.3,
+      "kind": "city"
+    },
+    {
+      "id": "el-calafate",
+      "names": {
+        "en": "El Calafate",
+        "pt-BR": "El Calafate",
+        "es": "El Calafate"
+      },
+      "country": "AR",
+      "aliases": [
+        "perito moreno",
+        "calafate"
+      ],
+      "tags": [
+        "nature",
+        "adventure"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        10,
+        11,
+        12
+      ],
+      "similar": [
+        "ushuaia",
+        "torres-del-paine",
+        "bariloche"
+      ],
+      "popularity": 3,
+      "lat": -50.34,
+      "lng": -72.26,
+      "kind": "city"
+    },
+    {
+      "id": "salta",
+      "names": {
+        "en": "Salta",
+        "pt-BR": "Salta",
+        "es": "Salta"
+      },
+      "country": "AR",
+      "aliases": [
+        "jujuy",
+        "purmamarca"
+      ],
+      "tags": [
+        "culture",
+        "nature",
+        "food"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        9,
+        10,
+        11
+      ],
+      "similar": [
+        "atacama",
+        "uyuni",
+        "mendoza"
+      ],
+      "popularity": 2,
+      "lat": -24.79,
+      "lng": -65.41,
+      "kind": "city"
+    },
+    {
+      "id": "santiago",
+      "names": {
+        "en": "Santiago",
+        "pt-BR": "Santiago",
+        "es": "Santiago de Chile"
+      },
+      "country": "CL",
+      "aliases": [
+        "santiago de chile",
+        "santiago chile"
+      ],
+      "tags": [
+        "city",
+        "food",
+        "nature"
+      ],
+      "bestMonths": [
+        3,
+        4,
+        6,
+        7,
+        8,
+        10,
+        11
+      ],
+      "similar": [
+        "mendoza",
+        "valparaiso",
+        "buenos-aires"
+      ],
+      "popularity": 4,
+      "lat": -33.45,
+      "lng": -70.67,
+      "kind": "city"
+    },
+    {
+      "id": "atacama",
+      "names": {
+        "en": "Atacama Desert",
+        "pt-BR": "Deserto do Atacama",
+        "es": "Desierto de Atacama"
+      },
+      "country": "CL",
+      "aliases": [
+        "san pedro de atacama",
+        "atacama"
+      ],
+      "tags": [
+        "nature",
+        "adventure"
+      ],
+      "bestMonths": [
+        3,
+        4,
+        5,
+        9,
+        10,
+        11
+      ],
+      "similar": [
+        "uyuni",
+        "salta",
+        "lencois-maranhenses"
+      ],
+      "popularity": 4,
+      "lat": -22.91,
+      "lng": -68.2,
+      "kind": "region"
+    },
+    {
+      "id": "torres-del-paine",
+      "names": {
+        "en": "Torres del Paine",
+        "pt-BR": "Torres del Paine",
+        "es": "Torres del Paine"
+      },
+      "country": "CL",
+      "aliases": [
+        "patagonia chilena",
+        "puerto natales"
+      ],
+      "tags": [
+        "nature",
+        "adventure"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        11,
+        12
+      ],
+      "similar": [
+        "el-calafate",
+        "ushuaia",
+        "chapada-diamantina"
+      ],
+      "popularity": 2,
+      "lat": -50.94,
+      "lng": -73.41,
+      "kind": "region"
+    },
+    {
+      "id": "valparaiso",
+      "names": {
+        "en": "Valparaíso",
+        "pt-BR": "Valparaíso",
+        "es": "Valparaíso"
+      },
+      "country": "CL",
+      "aliases": [
+        "vina del mar"
+      ],
+      "tags": [
+        "culture",
+        "city",
+        "food"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        11,
+        12
+      ],
+      "similar": [
+        "santiago",
+        "cartagena",
+        "lisbon"
+      ],
+      "popularity": 2,
+      "lat": -33.05,
+      "lng": -71.62,
+      "kind": "city"
+    },
+    {
+      "id": "montevideo",
+      "names": {
+        "en": "Montevideo",
+        "pt-BR": "Montevidéu",
+        "es": "Montevideo"
+      },
+      "country": "UY",
+      "aliases": [
+        "montevideu"
+      ],
+      "tags": [
+        "city",
+        "culture",
+        "food"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        11,
+        12
+      ],
+      "similar": [
+        "buenos-aires",
+        "punta-del-este",
+        "valparaiso"
+      ],
+      "popularity": 3,
+      "lat": -34.9,
+      "lng": -56.16,
+      "kind": "city"
+    },
+    {
+      "id": "punta-del-este",
+      "names": {
+        "en": "Punta del Este",
+        "pt-BR": "Punta del Este",
+        "es": "Punta del Este"
+      },
+      "country": "UY",
+      "aliases": [
+        "jose ignacio"
+      ],
+      "tags": [
+        "beach",
+        "nightlife",
+        "relax"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        12
+      ],
+      "similar": [
+        "florianopolis",
+        "ibiza",
+        "montevideo"
+      ],
+      "popularity": 3,
+      "lat": -34.96,
+      "lng": -54.95,
+      "kind": "city"
+    },
+    {
+      "id": "lima",
+      "names": {
+        "en": "Lima",
+        "pt-BR": "Lima",
+        "es": "Lima"
+      },
+      "country": "PE",
+      "aliases": [
+        "lima"
+      ],
+      "tags": [
+        "food",
+        "city",
+        "culture"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        12
+      ],
+      "similar": [
+        "cusco",
+        "mexico-city",
+        "bogota"
+      ],
+      "popularity": 3,
+      "lat": -12.05,
+      "lng": -77.04,
+      "kind": "city"
+    },
+    {
+      "id": "cusco",
+      "names": {
+        "en": "Cusco",
+        "pt-BR": "Cusco",
+        "es": "Cusco"
+      },
+      "country": "PE",
+      "aliases": [
+        "cuzco",
+        "machu picchu",
+        "vale sagrado",
+        "valle sagrado",
+        "sacred valley"
+      ],
+      "tags": [
+        "culture",
+        "adventure",
+        "nature"
+      ],
+      "bestMonths": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "uyuni",
+        "lima",
+        "atacama"
+      ],
+      "popularity": 5,
+      "lat": -13.53,
+      "lng": -71.97,
+      "kind": "city"
+    },
+    {
+      "id": "cartagena",
+      "names": {
+        "en": "Cartagena",
+        "pt-BR": "Cartagena",
+        "es": "Cartagena de Indias"
+      },
+      "country": "CO",
+      "aliases": [
+        "cartagena de indias"
+      ],
+      "tags": [
+        "beach",
+        "culture",
+        "nightlife"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        12
+      ],
+      "similar": [
+        "salvador",
+        "havana",
+        "rio-de-janeiro"
+      ],
+      "popularity": 4,
+      "lat": 10.39,
+      "lng": -75.51,
+      "kind": "city"
+    },
+    {
+      "id": "medellin",
+      "names": {
+        "en": "Medellín",
+        "pt-BR": "Medellín",
+        "es": "Medellín"
+      },
+      "country": "CO",
+      "aliases": [
+        "medellin",
+        "medellín"
+      ],
+      "tags": [
+        "city",
+        "nightlife",
+        "nature"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        7,
+        8,
+        12
+      ],
+      "similar": [
+        "bogota",
+        "cartagena",
+        "mexico-city"
+      ],
+      "popularity": 3,
+      "lat": 6.24,
+      "lng": -75.58,
+      "kind": "city"
+    },
+    {
+      "id": "bogota",
+      "names": {
+        "en": "Bogotá",
+        "pt-BR": "Bogotá",
+        "es": "Bogotá"
+      },
+      "country": "CO",
+      "aliases": [
+        "bogota",
+        "bogotá"
+      ],
+      "tags": [
+        "city",
+        "culture",
+        "food"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        7,
+        8,
+        12
+      ],
+      "similar": [
+        "medellin",
+        "lima",
+        "mexico-city"
+      ],
+      "popularity": 2,
+      "lat": 4.71,
+      "lng": -74.07,
+      "kind": "city"
+    },
+    {
+      "id": "mexico-city",
+      "names": {
+        "en": "Mexico City",
+        "pt-BR": "Cidade do México",
+        "es": "Ciudad de México"
+      },
+      "country": "MX",
+      "aliases": [
+        "cdmx",
+        "ciudad de mexico",
+        "mexico df",
+        "df"
+      ],
+      "tags": [
+        "city",
+        "food",
+        "culture"
+      ],
+      "bestMonths": [
+        3,
+        4,
+        5,
+        10,
+        11
+      ],
+      "similar": [
+        "oaxaca",
+        "buenos-aires",
+        "sao-paulo"
+      ],
+      "popularity": 4,
+      "lat": 19.43,
+      "lng": -99.13,
+      "kind": "city"
+    },
+    {
+      "id": "cancun",
+      "names": {
+        "en": "Cancún",
+        "pt-BR": "Cancún",
+        "es": "Cancún"
+      },
+      "country": "MX",
+      "aliases": [
+        "riviera maya",
+        "playa del carmen"
+      ],
+      "tags": [
+        "beach",
+        "nightlife",
+        "family"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        12
+      ],
+      "similar": [
+        "tulum",
+        "punta-cana",
+        "aruba"
+      ],
+      "popularity": 5,
+      "lat": 21.16,
+      "lng": -86.85,
+      "kind": "city"
+    },
+    {
+      "id": "tulum",
+      "names": {
+        "en": "Tulum",
+        "pt-BR": "Tulum",
+        "es": "Tulum"
+      },
+      "country": "MX",
+      "aliases": [
+        "tulum"
+      ],
+      "tags": [
+        "beach",
+        "relax",
+        "culture"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        12
+      ],
+      "similar": [
+        "cancun",
+        "jericoacoara",
+        "bali"
+      ],
+      "popularity": 4,
+      "lat": 20.21,
+      "lng": -87.47,
+      "kind": "city"
+    },
+    {
+      "id": "oaxaca",
+      "names": {
+        "en": "Oaxaca",
+        "pt-BR": "Oaxaca",
+        "es": "Oaxaca"
+      },
+      "country": "MX",
+      "aliases": [
+        "oaxaca de juarez"
+      ],
+      "tags": [
+        "food",
+        "culture"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        10,
+        11,
+        12
+      ],
+      "similar": [
+        "mexico-city",
+        "cusco",
+        "lima"
+      ],
+      "popularity": 2,
+      "lat": 17.07,
+      "lng": -96.73,
+      "kind": "city"
+    },
+    {
+      "id": "los-cabos",
+      "names": {
+        "en": "Los Cabos",
+        "pt-BR": "Los Cabos",
+        "es": "Los Cabos"
+      },
+      "country": "MX",
+      "aliases": [
+        "cabo san lucas",
+        "cabo"
+      ],
+      "tags": [
+        "beach",
+        "relax",
+        "adventure"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        11,
+        12
+      ],
+      "similar": [
+        "cancun",
+        "punta-cana",
+        "maldives"
+      ],
+      "popularity": 3,
+      "lat": 22.89,
+      "lng": -109.92,
+      "kind": "region"
+    },
+    {
+      "id": "punta-cana",
+      "names": {
+        "en": "Punta Cana",
+        "pt-BR": "Punta Cana",
+        "es": "Punta Cana"
+      },
+      "country": "DO",
+      "aliases": [
+        "bavaro"
+      ],
+      "tags": [
+        "beach",
+        "relax",
+        "family"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        12
+      ],
+      "similar": [
+        "cancun",
+        "aruba",
+        "curacao"
+      ],
+      "popularity": 4,
+      "lat": 18.58,
+      "lng": -68.4,
+      "kind": "region"
+    },
+    {
+      "id": "havana",
+      "names": {
+        "en": "Havana",
+        "pt-BR": "Havana",
+        "es": "La Habana"
+      },
+      "country": "CU",
+      "aliases": [
+        "habana",
+        "la habana"
+      ],
+      "tags": [
+        "culture",
+        "nightlife",
+        "city"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        11,
+        12
+      ],
+      "similar": [
+        "cartagena",
+        "salvador",
+        "lisbon"
+      ],
+      "popularity": 3,
+      "lat": 23.11,
+      "lng": -82.37,
+      "kind": "city"
+    },
+    {
+      "id": "aruba",
+      "names": {
+        "en": "Aruba",
+        "pt-BR": "Aruba",
+        "es": "Aruba"
+      },
+      "country": "AW",
+      "aliases": [
+        "oranjestad"
+      ],
+      "tags": [
+        "beach",
+        "relax",
+        "family"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "similar": [
+        "curacao",
+        "punta-cana",
+        "cancun"
+      ],
+      "popularity": 3,
+      "lat": 12.52,
+      "lng": -70.0,
+      "kind": "island"
+    },
+    {
+      "id": "curacao",
+      "names": {
+        "en": "Curaçao",
+        "pt-BR": "Curaçao",
+        "es": "Curazao"
+      },
+      "country": "CW",
+      "aliases": [
+        "willemstad"
+      ],
+      "tags": [
+        "beach",
+        "relax",
+        "adventure"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "similar": [
+        "aruba",
+        "punta-cana",
+        "los-cabos"
+      ],
+      "popularity": 2,
+      "lat": 12.17,
+      "lng": -68.99,
+      "kind": "island"
+    },
+    {
+      "id": "panama-city",
+      "names": {
+        "en": "Panama City",
+        "pt-BR": "Cidade do Panamá",
+        "es": "Ciudad de Panamá"
+      },
+      "country": "PA",
+      "aliases": [
+        "panama",
+        "ciudad de panama"
+      ],
+      "tags": [
+        "city",
+        "beach",
+        "food"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        12
+      ],
+      "similar": [
+        "cartagena",
+        "medellin",
+        "miami"
+      ],
+      "popularity": 2,
+      "lat": 8.98,
+      "lng": -79.52,
+      "kind": "city"
+    },
+    {
+      "id": "uyuni",
+      "names": {
+        "en": "Uyuni Salt Flat",
+        "pt-BR": "Salar de Uyuni",
+        "es": "Salar de Uyuni"
+      },
+      "country": "BO",
+      "aliases": [
+        "uyuni",
+        "salar de uyuni"
+      ],
+      "tags": [
+        "nature",
+        "adventure"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "similar": [
+        "atacama",
+        "cusco",
+        "salta"
+      ],
+      "popularity": 3,
+      "lat": -20.46,
+      "lng": -66.83,
+      "kind": "region"
+    },
+    {
+      "id": "galapagos",
+      "names": {
+        "en": "Galápagos Islands",
+        "pt-BR": "Ilhas Galápagos",
+        "es": "Islas Galápagos"
+      },
+      "country": "EC",
+      "aliases": [
+        "galapagos"
+      ],
+      "tags": [
+        "nature",
+        "adventure",
+        "beach"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "similar": [
+        "fernando-de-noronha",
+        "bonito",
+        "cape-town"
+      ],
+      "popularity": 2,
+      "lat": -0.74,
+      "lng": -90.31,
+      "kind": "island"
+    },
+    {
+      "id": "madrid",
+      "names": {
+        "en": "Madrid",
+        "pt-BR": "Madri",
+        "es": "Madrid"
+      },
+      "country": "ES",
+      "aliases": [
+        "madri"
+      ],
+      "tags": [
+        "city",
+        "culture",
+        "food",
+        "nightlife"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        6,
+        9,
+        10
+      ],
+      "similar": [
+        "barcelona",
+        "seville",
+        "buenos-aires"
+      ],
+      "popularity": 4,
+      "lat": 40.42,
+      "lng": -3.7,
+      "kind": "city"
+    },
+    {
+      "id": "barcelona",
+      "names": {
+        "en": "Barcelona",
+        "pt-BR": "Barcelona",
+        "es": "Barcelona"
+      },
+      "country": "ES",
+      "aliases": [
+        "bcn"
+      ],
+      "tags": [
+        "city",
+        "beach",
+        "food",
+        "culture"
+      ],
+      "bestMonths": [
+        5,
+        6,
+        7,
+        9,
+        10
+      ],
+      "similar": [
+        "madrid",
+        "lisbon",
+        "rome"
+      ],
+      "popularity": 5,
+      "lat": 41.39,
+      "lng": 2.17,
+      "kind": "city"
+    },
+    {
+      "id": "seville",
+      "names": {
+        "en": "Seville",
+        "pt-BR": "Sevilha",
+        "es": "Sevilla"
+      },
+      "country": "ES",
+      "aliases": [
+        "sevilla",
+        "sevilha"
+      ],
+      "tags": [
+        "culture",
+        "food",
+        "city"
+      ],
+      "bestMonths": [
+        3,
+        4,
+        5,
+        10,
+        11
+      ],
+      "similar": [
+        "granada",
+        "madrid",
+        "lisbon"
+      ],
+      "popularity": 4,
+      "lat": 37.39,
+      "lng": -5.99,
+      "kind": "city"
+    },
+    {
+      "id": "granada",
+      "names": {
+        "en": "Granada",
+        "pt-BR": "Granada",
+        "es": "Granada"
+      },
+      "country": "ES",
+      "aliases": [
+        "alhambra"
+      ],
+      "tags": [
+        "culture",
+        "food"
+      ],
+      "bestMonths": [
+        3,
+        4,
+        5,
+        10,
+        11
+      ],
+      "similar": [
+        "seville",
+        "marrakech",
+        "florence"
+      ],
+      "popularity": 3,
+      "lat": 37.18,
+      "lng": -3.6,
+      "kind": "city"
+    },
+    {
+      "id": "mallorca",
+      "names": {
+        "en": "Mallorca",
+        "pt-BR": "Maiorca",
+        "es": "Mallorca"
+      },
+      "country": "ES",
+      "aliases": [
+        "majorca",
+        "maiorca",
+        "palma de mallorca",
+        "palma"
+      ],
+      "tags": [
+        "beach",
+        "relax",
+        "nature"
+      ],
+      "bestMonths": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "ibiza",
+        "amalfi-coast",
+        "algarve"
+      ],
+      "popularity": 3,
+      "lat": 39.57,
+      "lng": 2.65,
+      "kind": "island"
+    },
+    {
+      "id": "ibiza",
+      "names": {
+        "en": "Ibiza",
+        "pt-BR": "Ibiza",
+        "es": "Ibiza"
+      },
+      "country": "ES",
+      "aliases": [
+        "eivissa"
+      ],
+      "tags": [
+        "nightlife",
+        "beach"
+      ],
+      "bestMonths": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "mallorca",
+        "punta-del-este",
+        "santorini"
+      ],
+      "popularity": 3,
+      "lat": 38.91,
+      "lng": 1.43,
+      "kind": "island"
+    },
+    {
+      "id": "tenerife",
+      "names": {
+        "en": "Tenerife",
+        "pt-BR": "Tenerife",
+        "es": "Tenerife"
+      },
+      "country": "ES",
+      "aliases": [
+        "canary islands",
+        "ilhas canarias",
+        "islas canarias",
+        "canarias"
+      ],
+      "tags": [
+        "beach",
+        "nature",
+        "family"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "similar": [
+        "madeira",
+        "mallorca",
+        "algarve"
+      ],
+      "popularity": 3,
+      "lat": 28.29,
+      "lng": -16.63,
+      "kind": "island"
+    },
+    {
+      "id": "san-sebastian",
+      "names": {
+        "en": "San Sebastián",
+        "pt-BR": "San Sebastián",
+        "es": "San Sebastián"
+      },
+      "country": "ES",
+      "aliases": [
+        "donostia"
+      ],
+      "tags": [
+        "food",
+        "beach",
+        "culture"
+      ],
+      "bestMonths": [
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "porto",
+        "bilbao",
+        "florence"
+      ],
+      "popularity": 2,
+      "lat": 43.32,
+      "lng": -1.98,
+      "kind": "city"
+    },
+    {
+      "id": "lisbon",
+      "names": {
+        "en": "Lisbon",
+        "pt-BR": "Lisboa",
+        "es": "Lisboa"
+      },
+      "country": "PT",
+      "aliases": [
+        "lisboa",
+        "lisbonne",
+        "sintra"
+      ],
+      "tags": [
+        "city",
+        "culture",
+        "food"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        6,
+        9,
+        10
+      ],
+      "similar": [
+        "porto",
+        "seville",
+        "barcelona"
+      ],
+      "popularity": 5,
+      "lat": 38.72,
+      "lng": -9.14,
+      "kind": "city"
+    },
+    {
+      "id": "porto",
+      "names": {
+        "en": "Porto",
+        "pt-BR": "Porto",
+        "es": "Oporto"
+      },
+      "country": "PT",
+      "aliases": [
+        "oporto"
+      ],
+      "tags": [
+        "city",
+        "food",
+        "culture"
+      ],
+      "bestMonths": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "lisbon",
+        "san-sebastian",
+        "bilbao"
+      ],
+      "popularity": 4,
+      "lat": 41.15,
+      "lng": -8.61,
+      "kind": "city"
+    },
+    {
+      "id": "algarve",
+      "names": {
+        "en": "Algarve",
+        "pt-BR": "Algarve",
+        "es": "Algarve"
+      },
+      "country": "PT",
+      "aliases": [
+        "faro",
+        "lagos",
+        "albufeira"
+      ],
+      "tags": [
+        "beach",
+        "relax",
+        "family"
+      ],
+      "bestMonths": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "mallorca",
+        "madeira",
+        "tenerife"
+      ],
+      "popularity": 3,
+      "lat": 37.02,
+      "lng": -7.93,
+      "kind": "region"
+    },
+    {
+      "id": "madeira",
+      "names": {
+        "en": "Madeira",
+        "pt-BR": "Ilha da Madeira",
+        "es": "Madeira"
+      },
+      "country": "PT",
+      "aliases": [
+        "funchal",
+        "ilha da madeira"
+      ],
+      "tags": [
+        "nature",
+        "adventure",
+        "relax"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "similar": [
+        "tenerife",
+        "azores",
+        "algarve"
+      ],
+      "popularity": 3,
+      "lat": 32.65,
+      "lng": -16.91,
+      "kind": "island"
+    },
+    {
+      "id": "azores",
+      "names": {
+        "en": "Azores",
+        "pt-BR": "Açores",
+        "es": "Azores"
+      },
+      "country": "PT",
+      "aliases": [
+        "acores",
+        "sao miguel",
+        "ponta delgada"
+      ],
+      "tags": [
+        "nature",
+        "adventure"
+      ],
+      "bestMonths": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "madeira",
+        "reykjavik",
+        "galapagos"
+      ],
+      "popularity": 2,
+      "lat": 37.74,
+      "lng": -25.67,
+      "kind": "island"
+    },
+    {
+      "id": "bilbao",
+      "names": {
+        "en": "Bilbao",
+        "pt-BR": "Bilbau",
+        "es": "Bilbao"
+      },
+      "country": "ES",
+      "aliases": [
+        "bilbau"
+      ],
+      "tags": [
+        "food",
+        "culture",
+        "city"
+      ],
+      "bestMonths": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "san-sebastian",
+        "porto",
+        "madrid"
+      ],
+      "popularity": 2,
+      "lat": 43.26,
+      "lng": -2.93,
+      "kind": "city"
+    },
+    {
+      "id": "paris",
+      "names": {
+        "en": "Paris",
+        "pt-BR": "Paris",
+        "es": "París"
+      },
+      "country": "FR",
+      "aliases": [
+        "paris",
+        "parís"
+      ],
+      "tags": [
+        "city",
+        "culture",
+        "food"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        6,
+        9,
+        10
+      ],
+      "similar": [
+        "rome",
+        "london",
+        "amsterdam"
+      ],
+      "popularity": 5,
+      "lat": 48.86,
+      "lng": 2.35,
+      "kind": "city"
+    },
+    {
+      "id": "rome",
+      "names": {
+        "en": "Rome",
+        "pt-BR": "Roma",
+        "es": "Roma"
+      },
+      "country": "IT",
+      "aliases": [
+        "roma"
+      ],
+      "tags": [
+        "culture",
+        "food",
+        "city"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        6,
+        9,
+        10
+      ],
+      "similar": [
+        "florence",
+        "paris",
+        "athens"
+      ],
+      "popularity": 5,
+      "lat": 41.9,
+      "lng": 12.5,
+      "kind": "city"
+    },
+    {
+      "id": "florence",
+      "names": {
+        "en": "Florence",
+        "pt-BR": "Florença",
+        "es": "Florencia"
+      },
+      "country": "IT",
+      "aliases": [
+        "firenze",
+        "florenca",
+        "toscana",
+        "tuscany"
+      ],
+      "tags": [
+        "culture",
+        "food"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        6,
+        9,
+        10
+      ],
+      "similar": [
+        "rome",
+        "venice",
+        "seville"
+      ],
+      "popularity": 4,
+      "lat": 43.77,
+      "lng": 11.26,
+      "kind": "city"
+    },
+    {
+      "id": "venice",
+      "names": {
+        "en": "Venice",
+        "pt-BR": "Veneza",
+        "es": "Venecia"
+      },
+      "country": "IT",
+      "aliases": [
+        "venezia",
+        "veneza"
+      ],
+      "tags": [
+        "culture",
+        "city"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        6,
+        9,
+        10
+      ],
+      "similar": [
+        "florence",
+        "amsterdam",
+        "dubrovnik"
+      ],
+      "popularity": 4,
+      "lat": 45.44,
+      "lng": 12.33,
+      "kind": "city"
+    },
+    {
+      "id": "amalfi-coast",
+      "names": {
+        "en": "Amalfi Coast",
+        "pt-BR": "Costa Amalfitana",
+        "es": "Costa Amalfitana"
+      },
+      "country": "IT",
+      "aliases": [
+        "amalfi",
+        "positano",
+        "costiera amalfitana"
+      ],
+      "tags": [
+        "beach",
+        "relax",
+        "food"
+      ],
+      "bestMonths": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "santorini",
+        "mallorca",
+        "dubrovnik"
+      ],
+      "popularity": 3,
+      "lat": 40.63,
+      "lng": 14.6,
+      "kind": "region"
+    },
+    {
+      "id": "london",
+      "names": {
+        "en": "London",
+        "pt-BR": "Londres",
+        "es": "Londres"
+      },
+      "country": "GB",
+      "aliases": [
+        "londres"
+      ],
+      "tags": [
+        "city",
+        "culture",
+        "nightlife"
+      ],
+      "bestMonths": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "paris",
+        "amsterdam",
+        "new-york"
+      ],
+      "popularity": 4,
+      "lat": 51.51,
+      "lng": -0.13,
+      "kind": "city"
+    },
+    {
+      "id": "amsterdam",
+      "names": {
+        "en": "Amsterdam",
+        "pt-BR": "Amsterdã",
+        "es": "Ámsterdam"
+      },
+      "country": "NL",
+      "aliases": [
+        "amsterda"
+      ],
+      "tags": [
+        "city",
+        "culture",
+        "nightlife"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "berlin",
+        "prague",
+        "london"
+      ],
+      "popularity": 3,
+      "lat": 52.37,
+      "lng": 4.9,
+      "kind": "city"
+    },
+    {
+      "id": "berlin",
+      "names": {
+        "en": "Berlin",
+        "pt-BR": "Berlim",
+        "es": "Berlín"
+      },
+      "country": "DE",
+      "aliases": [
+        "berlim"
+      ],
+      "tags": [
+        "city",
+        "nightlife",
+        "culture"
+      ],
+      "bestMonths": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "amsterdam",
+        "prague",
+        "london"
+      ],
+      "popularity": 3,
+      "lat": 52.52,
+      "lng": 13.41,
+      "kind": "city"
+    },
+    {
+      "id": "prague",
+      "names": {
+        "en": "Prague",
+        "pt-BR": "Praga",
+        "es": "Praga"
+      },
+      "country": "CZ",
+      "aliases": [
+        "praha",
+        "praga"
+      ],
+      "tags": [
+        "culture",
+        "city",
+        "nightlife"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        6,
+        9,
+        10,
+        12
+      ],
+      "similar": [
+        "berlin",
+        "amsterdam",
+        "istanbul"
+      ],
+      "popularity": 3,
+      "lat": 50.08,
+      "lng": 14.44,
+      "kind": "city"
+    },
+    {
+      "id": "athens",
+      "names": {
+        "en": "Athens",
+        "pt-BR": "Atenas",
+        "es": "Atenas"
+      },
+      "country": "GR",
+      "aliases": [
+        "atenas",
+        "athina"
+      ],
+      "tags": [
+        "culture",
+        "food",
+        "city"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        6,
+        9,
+        10
+      ],
+      "similar": [
+        "santorini",
+        "rome",
+        "istanbul"
+      ],
+      "popularity": 3,
+      "lat": 37.98,
+      "lng": 23.73,
+      "kind": "city"
+    },
+    {
+      "id": "santorini",
+      "names": {
+        "en": "Santorini",
+        "pt-BR": "Santorini",
+        "es": "Santorini"
+      },
+      "country": "GR",
+      "aliases": [
+        "thira",
+        "fira",
+        "oia"
+      ],
+      "tags": [
+        "beach",
+        "relax"
+      ],
+      "bestMonths": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "amalfi-coast",
+        "maldives",
+        "ibiza"
+      ],
+      "popularity": 4,
+      "lat": 36.39,
+      "lng": 25.46,
+      "kind": "island"
+    },
+    {
+      "id": "dubrovnik",
+      "names": {
+        "en": "Dubrovnik",
+        "pt-BR": "Dubrovnik",
+        "es": "Dubrovnik"
+      },
+      "country": "HR",
+      "aliases": [
+        "croatia",
+        "croacia"
+      ],
+      "tags": [
+        "beach",
+        "culture"
+      ],
+      "bestMonths": [
+        5,
+        6,
+        9,
+        10
+      ],
+      "similar": [
+        "santorini",
+        "venice",
+        "amalfi-coast"
+      ],
+      "popularity": 2,
+      "lat": 42.65,
+      "lng": 18.09,
+      "kind": "city"
+    },
+    {
+      "id": "istanbul",
+      "names": {
+        "en": "Istanbul",
+        "pt-BR": "Istambul",
+        "es": "Estambul"
+      },
+      "country": "TR",
+      "aliases": [
+        "istambul",
+        "estambul",
+        "constantinople"
+      ],
+      "tags": [
+        "culture",
+        "food",
+        "city"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        9,
+        10,
+        11
+      ],
+      "similar": [
+        "athens",
+        "marrakech",
+        "dubai"
+      ],
+      "popularity": 3,
+      "lat": 41.01,
+      "lng": 28.98,
+      "kind": "city"
+    },
+    {
+      "id": "swiss-alps",
+      "names": {
+        "en": "Swiss Alps",
+        "pt-BR": "Alpes Suíços",
+        "es": "Alpes Suizos"
+      },
+      "country": "CH",
+      "aliases": [
+        "interlaken",
+        "zermatt",
+        "alpes suicos",
+        "switzerland",
+        "suica",
+        "suiza"
+      ],
+      "tags": [
+        "nature",
+        "adventure",
+        "relax"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        6,
+        7,
+        8,
+        12
+      ],
+      "similar": [
+        "bariloche",
+        "gramado",
+        "reykjavik"
+      ],
+      "popularity": 3,
+      "lat": 46.02,
+      "lng": 7.75,
+      "kind": "region"
+    },
+    {
+      "id": "reykjavik",
+      "names": {
+        "en": "Reykjavík",
+        "pt-BR": "Reykjavík",
+        "es": "Reikiavik"
+      },
+      "country": "IS",
+      "aliases": [
+        "iceland",
+        "islandia",
+        "reikiavik"
+      ],
+      "tags": [
+        "nature",
+        "adventure"
+      ],
+      "bestMonths": [
+        2,
+        3,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "ushuaia",
+        "swiss-alps",
+        "azores"
+      ],
+      "popularity": 2,
+      "lat": 64.15,
+      "lng": -21.94,
+      "kind": "city"
+    },
+    {
+      "id": "new-york",
+      "names": {
+        "en": "New York",
+        "pt-BR": "Nova York",
+        "es": "Nueva York"
+      },
+      "country": "US",
+      "aliases": [
+        "nyc",
+        "new york city",
+        "nova iorque",
+        "manhattan",
+        "ny"
+      ],
+      "tags": [
+        "city",
+        "culture",
+        "food",
+        "nightlife"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        6,
+        9,
+        10,
+        12
+      ],
+      "similar": [
+        "london",
+        "sao-paulo",
+        "paris"
+      ],
+      "popularity": 5,
+      "lat": 40.71,
+      "lng": -74.01,
+      "kind": "city"
+    },
+    {
+      "id": "orlando",
+      "names": {
+        "en": "Orlando",
+        "pt-BR": "Orlando",
+        "es": "Orlando"
+      },
+      "country": "US",
+      "aliases": [
+        "disney",
+        "disney world",
+        "walt disney world"
+      ],
+      "tags": [
+        "family",
+        "adventure"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        10,
+        11,
+        12
+      ],
+      "similar": [
+        "miami",
+        "las-vegas",
+        "cancun"
+      ],
+      "popularity": 5,
+      "lat": 28.54,
+      "lng": -81.38,
+      "kind": "city"
+    },
+    {
+      "id": "miami",
+      "names": {
+        "en": "Miami",
+        "pt-BR": "Miami",
+        "es": "Miami"
+      },
+      "country": "US",
+      "aliases": [
+        "miami beach"
+      ],
+      "tags": [
+        "beach",
+        "nightlife",
+        "city"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        11,
+        12
+      ],
+      "similar": [
+        "orlando",
+        "cancun",
+        "panama-city"
+      ],
+      "popularity": 4,
+      "lat": 25.76,
+      "lng": -80.19,
+      "kind": "city"
+    },
+    {
+      "id": "las-vegas",
+      "names": {
+        "en": "Las Vegas",
+        "pt-BR": "Las Vegas",
+        "es": "Las Vegas"
+      },
+      "country": "US",
+      "aliases": [
+        "vegas"
+      ],
+      "tags": [
+        "nightlife",
+        "city",
+        "adventure"
+      ],
+      "bestMonths": [
+        3,
+        4,
+        5,
+        9,
+        10,
+        11
+      ],
+      "similar": [
+        "miami",
+        "new-york",
+        "dubai"
+      ],
+      "popularity": 3,
+      "lat": 36.17,
+      "lng": -115.14,
+      "kind": "city"
+    },
+    {
+      "id": "marrakech",
+      "names": {
+        "en": "Marrakech",
+        "pt-BR": "Marrakech",
+        "es": "Marrakech"
+      },
+      "country": "MA",
+      "aliases": [
+        "marrakesh",
+        "marraquexe"
+      ],
+      "tags": [
+        "culture",
+        "food",
+        "adventure"
+      ],
+      "bestMonths": [
+        3,
+        4,
+        5,
+        10,
+        11
+      ],
+      "similar": [
+        "istanbul",
+        "granada"
+      ],
+      "popularity": 3,
+      "lat": 31.63,
+      "lng": -8.01,
+      "kind": "city"
+    },
+    {
+      "id": "cape-town",
+      "names": {
+        "en": "Cape Town",
+        "pt-BR": "Cidade do Cabo",
+        "es": "Ciudad del Cabo"
+      },
+      "country": "ZA",
+      "aliases": [
+        "cidade do cabo",
+        "ciudad del cabo"
+      ],
+      "tags": [
+        "nature",
+        "city",
+        "beach",
+        "food"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        10,
+        11,
+        12
+      ],
+      "similar": [
+        "sydney",
+        "rio-de-janeiro",
+        "galapagos"
+      ],
+      "popularity": 3,
+      "lat": -33.92,
+      "lng": 18.42,
+      "kind": "city"
+    },
+    {
+      "id": "dubai",
+      "names": {
+        "en": "Dubai",
+        "pt-BR": "Dubai",
+        "es": "Dubái"
+      },
+      "country": "AE",
+      "aliases": [
+        "dubái"
+      ],
+      "tags": [
+        "city",
+        "beach",
+        "family"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        11,
+        12
+      ],
+      "similar": [
+        "istanbul",
+        "las-vegas",
+        "maldives"
+      ],
+      "popularity": 4,
+      "lat": 25.2,
+      "lng": 55.27,
+      "kind": "city"
+    },
+    {
+      "id": "maldives",
+      "names": {
+        "en": "Maldives",
+        "pt-BR": "Maldivas",
+        "es": "Maldivas"
+      },
+      "country": "MV",
+      "aliases": [
+        "maldivas",
+        "male"
+      ],
+      "tags": [
+        "beach",
+        "relax"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        4,
+        11,
+        12
+      ],
+      "similar": [
+        "bali",
+        "santorini",
+        "fernando-de-noronha"
+      ],
+      "popularity": 4,
+      "lat": 4.18,
+      "lng": 73.51,
+      "kind": "island"
+    },
+    {
+      "id": "tokyo",
+      "names": {
+        "en": "Tokyo",
+        "pt-BR": "Tóquio",
+        "es": "Tokio"
+      },
+      "country": "JP",
+      "aliases": [
+        "toquio",
+        "tokio",
+        "kyoto",
+        "quioto"
+      ],
+      "tags": [
+        "city",
+        "food",
+        "culture"
+      ],
+      "bestMonths": [
+        3,
+        4,
+        5,
+        10,
+        11
+      ],
+      "similar": [
+        "bangkok",
+        "new-york"
+      ],
+      "popularity": 4,
+      "lat": 35.68,
+      "lng": 139.69,
+      "kind": "city"
+    },
+    {
+      "id": "bangkok",
+      "names": {
+        "en": "Bangkok",
+        "pt-BR": "Bangkok",
+        "es": "Bangkok"
+      },
+      "country": "TH",
+      "aliases": [
+        "banguecoque",
+        "phuket",
+        "tailandia",
+        "thailand"
+      ],
+      "tags": [
+        "city",
+        "food",
+        "nightlife",
+        "beach"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        11,
+        12
+      ],
+      "similar": [
+        "bali",
+        "tokyo",
+        "dubai"
+      ],
+      "popularity": 3,
+      "lat": 13.76,
+      "lng": 100.5,
+      "kind": "city"
+    },
+    {
+      "id": "bali",
+      "names": {
+        "en": "Bali",
+        "pt-BR": "Bali",
+        "es": "Bali"
+      },
+      "country": "ID",
+      "aliases": [
+        "ubud",
+        "denpasar"
+      ],
+      "tags": [
+        "beach",
+        "relax",
+        "nature",
+        "culture"
+      ],
+      "bestMonths": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "similar": [
+        "maldives",
+        "bangkok",
+        "tulum"
+      ],
+      "popularity": 4,
+      "lat": -8.41,
+      "lng": 115.19,
+      "kind": "island"
+    },
+    {
+      "id": "sydney",
+      "names": {
+        "en": "Sydney",
+        "pt-BR": "Sydney",
+        "es": "Sídney"
+      },
+      "country": "AU",
+      "aliases": [
+        "sidney"
+      ],
+      "tags": [
+        "city",
+        "beach",
+        "nature"
+      ],
+      "bestMonths": [
+        1,
+        2,
+        3,
+        9,
+        10,
+        11,
+        12
+      ],
+      "similar": [
+        "cape-town",
+        "rio-de-janeiro",
+        "london"
+      ],
+      "popularity": 3,
+      "lat": -33.87,
+      "lng": 151.21,
+      "kind": "city"
+    }
+  ]
+}

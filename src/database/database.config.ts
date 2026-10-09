@@ -19,6 +19,7 @@ import { Notification, NotificationJob, PushTicket, PushToken } from '../notific
 import { ChecklistItem, ChecklistReminder } from '../checklist/checklist.entities.js';
 import { AvatarUpload } from '../moments/avatar-upload.entity.js';
 import { IdempotencyKey } from '../idempotency/idempotency-key.entity.js';
+import { HomeCopy } from '../home/home-copy.entity.js';
 import { migrations } from './migrations/index.js';
 
 const isTrue = (value: string | undefined): boolean => value?.toLowerCase() === 'true';
@@ -35,7 +36,7 @@ export function databaseConfig(config: ConfigService): TypeOrmModuleOptions {
     database: config.get<string>('PGDATABASE'),
     ssl: isTrue(config.get<string>('PGSSL')) ? { rejectUnauthorized: false } : false,
     uuidExtension: 'pgcrypto',
-    entities: [Trip, SuggestedEvent, User, RefreshToken, TripMember, TripInvite, TripRemoval, AiConversation, AiMessage, TripPlace, UserEntitlement, BillingEvent, Moment, UserAchievement, TripJourneySkip, PushToken, Notification, NotificationJob, PushTicket, ChecklistItem, ChecklistReminder, AvatarUpload, IdempotencyKey],
+    entities: [Trip, SuggestedEvent, User, RefreshToken, TripMember, TripInvite, TripRemoval, AiConversation, AiMessage, TripPlace, UserEntitlement, BillingEvent, Moment, UserAchievement, TripJourneySkip, PushToken, Notification, NotificationJob, PushTicket, ChecklistItem, ChecklistReminder, AvatarUpload, IdempotencyKey, HomeCopy],
     migrations,
     migrationsRun: true,
     synchronize: isTrue(config.get<string>('DB_SYNCHRONIZE')),

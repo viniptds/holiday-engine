@@ -27,6 +27,6 @@ export function createPhotoSource(config: AiConfig, fetchFn: FetchFn): PhotoSour
     MediaService,
     DestinationResolver,
   ],
-  exports: [DestinationResolver, PHOTO_SOURCE],
+  exports: [DestinationResolver, PHOTO_SOURCE, MediaService],
 })
 export class MediaModule {}

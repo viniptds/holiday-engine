@@ -1,0 +1,44 @@
+{
+  "templates": [
+    {
+      "headline": "{destination} nas próximas duas semanas",
+      "subline": "A {distanceKm} km de você, {tempC} °C hoje, com {persona}.",
+      "plannerPrompt": "Quero planejar uma viagem curta para {destination} nas próximas duas semanas."
+    },
+    {
+      "headline": "{destination}, uma fuga rápida",
+      "subline": "Só {distanceKm} km de distância e {tempC} °C esta tarde.",
+      "plannerPrompt": "Quero planejar uma escapada rápida para {destination} nas próximas duas semanas."
+    },
+    {
+      "headline": "{destination} enquanto faz {tempC} °C",
+      "subline": "A {distanceKm} km, um fim de semana que não precisa de maratona de planejamento.",
+      "plannerPrompt": "Quero planejar uma viagem de fim de semana para {destination} nos próximos 15 dias."
+    },
+    {
+      "headline": "{destination} antes do mês acabar",
+      "subline": "A {distanceKm} km de casa, duas noites bastam para respirar.",
+      "plannerPrompt": "Quero planejar uma viagem de duas noites para {destination} antes do fim do mês."
+    },
+    {
+      "headline": "{destination} por duas noites",
+      "subline": "{distanceKm} km de você, {tempC} °C e café da manhã sem hora no sábado.",
+      "plannerPrompt": "Quero planejar duas noites de viagem para {destination} em breve."
+    },
+    {
+      "headline": "{destination}, mais perto do que parece",
+      "subline": "A {distanceKm} km da sua porta e em boa época: {month}.",
+      "plannerPrompt": "Quero planejar uma viagem curta para {destination} em {month}."
+    },
+    {
+      "headline": "{destination} neste fim de semana",
+      "subline": "A {distanceKm} km, {tempC} °C hoje e {persona} o fim de semana todo.",
+      "plannerPrompt": "Quero planejar uma viagem para {destination} neste fim de semana."
+    },
+    {
+      "headline": "{destination} num fim de semana livre",
+      "subline": "Você sai sexta e volta domingo à noite, {distanceKm} km por trecho.",
+      "plannerPrompt": "Quero planejar uma viagem de sexta a domingo para {destination}."
+    }
+  ]
+}
