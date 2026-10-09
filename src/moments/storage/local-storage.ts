@@ -1,6 +1,6 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import type { Readable } from 'node:stream';
 import { DOWNLOAD_URL_TTL_SECONDS, OBJECT_KEY, UPLOAD_URL_TTL_SECONDS } from './object-storage.js';
@@ -63,6 +63,26 @@ export class LocalObjectStorage implements ObjectStorage {
   async delete(key: string): Promise<void> {
     await rm(this.path(key), { force: true });
     await rm(`${this.path(key)}.type`, { force: true });
+  }
+
+  async readStart(key: string, length: number): Promise<Buffer | null> {
+    let handle;
+    try {
+      handle = await open(this.path(key), 'r');
+    } catch {
+      return null;
+    }
+    try {
+      const buffer = Buffer.alloc(length);
+      const { bytesRead } = await handle.read(buffer, 0, length, 0);
+      return buffer.subarray(0, bytesRead);
+    } finally {
+      await handle.close();
+    }
+  }
+
+  async setContentType(key: string, contentType: string): Promise<void> {
+    await writeFile(`${this.path(key)}.type`, contentType);
   }
 
   /** The grant a token carries, if it's genuine, unexpired and for `method`. */

@@ -19,6 +19,10 @@ export interface ObjectStorage {
   stat(key: string): Promise<StoredObject | null>;
   /** Deletes the object; a missing one is not an error. */
   delete(key: string): Promise<void>;
+  /** The object's first `length` bytes (fewer if it's shorter), or null if it doesn't exist. */
+  readStart(key: string, length: number): Promise<Buffer | null>;
+  /** Rewrites the object's stored Content-Type (S3: CopyObject onto itself, metadata REPLACE). */
+  setContentType(key: string, contentType: string): Promise<void>;
 }
 
 export const OBJECT_STORAGE = Symbol('OBJECT_STORAGE');

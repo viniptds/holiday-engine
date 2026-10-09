@@ -1,6 +1,6 @@
 import { readStorageConfig } from './storage.config.js';
 
-const S3 = { STORAGE_DRIVER: 's3', S3_BUCKET: 'photos', S3_ACCESS_KEY_ID: 'AKIA', S3_SECRET_ACCESS_KEY: 'very-secret-value' };
+const S3 = { STORAGE_DRIVER: 's3', S3_REGION: 'eu-west-1', S3_BUCKET: 'photos', S3_ACCESS_KEY_ID: 'AKIA', S3_SECRET_ACCESS_KEY: 'very-secret-value' };
 
 describe('readStorageConfig', () => {
   it('defaults to local storage under ./storage and 50 / 1000 photos per trip', () => {
@@ -13,10 +13,10 @@ describe('readStorageConfig', () => {
     expect(readStorageConfig({ NODE_ENV: 'production', ...S3 }).driver).toBe('s3');
   });
 
-  it('reads the S3 settings, with region auto and virtual-hosted style by default', () => {
+  it('reads the S3 settings, virtual-hosted style by default', () => {
     expect(readStorageConfig(S3).s3).toEqual({
       endpoint: undefined,
-      region: 'auto',
+      region: 'eu-west-1',
       bucket: 'photos',
       accessKeyId: 'AKIA',
       secretAccessKey: 'very-secret-value',
@@ -27,6 +27,20 @@ describe('readStorageConfig', () => {
       forcePathStyle: true,
       region: 'us-east-1',
     });
+  });
+
+  it.each([
+    ['region auto', { S3_REGION: 'auto' }],
+    ['region AUTO', { S3_REGION: 'AUTO' }],
+    ['no region', { S3_REGION: '' }],
+  ])("refuses AWS (no S3_ENDPOINT) with %s: 'auto' is for Cloudflare R2", (_label, fields) => {
+    expect(() => readStorageConfig({ ...S3, ...fields })).toThrow(
+      "S3_REGION must be your bucket's AWS region (e.g. us-east-1) when S3_ENDPOINT is empty; 'auto' is for Cloudflare R2",
+    );
+  });
+
+  it('allows region auto with an endpoint (R2)', () => {
+    expect(readStorageConfig({ ...S3, S3_REGION: 'auto', S3_ENDPOINT: 'https://acct.r2.cloudflarestorage.com' }).s3).toMatchObject({ region: 'auto' });
   });
 
   it('names the missing S3 settings, never values', () => {

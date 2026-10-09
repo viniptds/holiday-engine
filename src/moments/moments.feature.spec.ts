@@ -128,13 +128,15 @@ describe('Moments API (feature)', () => {
     });
 
     it.each([
-      ['a different size', 4096, 'image/jpeg'],
-      ['a different type', 2048, 'image/png'],
-      ['no type', 2048, null],
-    ])('refuses %s with 409 UPLOAD_MISMATCH and deletes the moment and object', async (_label, size, type) => {
+      ['a different size', 4096, 'image/jpeg', undefined],
+      ['a different type', 2048, 'image/png', undefined],
+      ['no type and bytes that are not a JPEG', 2048, null, Buffer.from('PNG')],
+      ['no type and a wrong size', 4096, null, undefined],
+      ['an empty type and an empty object start', 2048, '', Buffer.alloc(0)],
+    ])('refuses %s with 409 UPLOAD_MISMATCH and deletes the moment and object', async (_label: string, size: number, type: string | null, start: Buffer | undefined) => {
       const pending = await moment(OWNER, null, {}, false);
       const row = h.db.all(Moment)[0];
-      storage.put(row.objectKey, size, type);
+      storage.put(row.objectKey, size, type, start);
 
       const res = await h.json('POST', `/moments/${pending.id}/complete`, OWNER);
 
@@ -142,6 +144,33 @@ describe('Moments API (feature)', () => {
       expect(res.body).toMatchObject({ code: 'CONFLICT', reason: 'UPLOAD_MISMATCH' });
       expect(h.db.all(Moment)).toHaveLength(0);
       expect(storage.deleted).toEqual([row.objectKey]);
+    });
+
+    it('accepts an upload stored without a Content-Type when it is a JPEG of the declared size, and fixes its type', async () => {
+      const pending = await moment(OWNER, null, {}, false);
+      const row = h.db.all(Moment)[0];
+      storage.put(row.objectKey, PHOTO.byteSize, null, Buffer.from([0xff, 0xd8, 0xff, 0xe1]));
+
+      const res = await h.json<MomentDto>('POST', `/moments/${pending.id}/complete`, OWNER);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('ready');
+      expect(storage.objects.get(row.objectKey)?.contentType).toBe('image/jpeg');
+      expect(storage.deleted).toEqual([]);
+    });
+
+    it('awaits the object delete on a mismatch and logs a failure at warn with the key', async () => {
+      const pending = await moment(OWNER, null, {}, false);
+      const row = h.db.all(Moment)[0];
+      storage.put(row.objectKey, 1, 'image/jpeg');
+      storage.failDeletes = true;
+      const warn = jest.spyOn(Logger.prototype, 'warn');
+
+      const res = await h.json('POST', `/moments/${pending.id}/complete`, OWNER);
+
+      expect(res.body).toMatchObject({ reason: 'UPLOAD_MISMATCH' });
+      expect(h.db.all(Moment)).toEqual([]);
+      expect(warn).toHaveBeenCalledWith(`Moment ${pending.id}: deleting its object failed (key ${row.objectKey}): Error: storage down`);
     });
 
     it("lets only the uploader complete it (404 for anyone else, even the trip's owner)", async () => {
