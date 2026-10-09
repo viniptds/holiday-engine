@@ -5,3 +5,6 @@ dist
 
 # Moments photos (STORAGE_DRIVER=local, dev only)
 /storage/
+
+# test lock (scripts/run-tests.mjs)
+.test-lock/

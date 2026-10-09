@@ -10,7 +10,8 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "repo-map": "node scripts/repo-map.mjs"
+    "repo-map": "node scripts/repo-map.mjs",
+    "test:full": "node --experimental-vm-modules scripts/run-tests.mjs"
   },
   "type": "module",
   "author": "",
