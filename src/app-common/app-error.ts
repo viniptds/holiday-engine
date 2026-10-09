@@ -45,6 +45,7 @@ export const CONFLICT_REASONS = [
   'UNASSIGNED_MOMENTS_LIMIT',
   'UPLOAD_INCOMPLETE',
   'UPLOAD_MISMATCH',
+  'MOMENT_DAY_LOCKED',
 ] as const;
 export const FORBIDDEN_REASONS = ['REMOVED_FROM_TRIP', 'INVITE_OTHER_ACCOUNT', 'DEV_ACCOUNT_EMAIL_INVITE', 'NOT_CONVERSATION_AUTHOR'] as const;
 /** VALIDATION carries a reason only where the contract lists one. */

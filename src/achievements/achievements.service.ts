@@ -40,7 +40,7 @@ import { JOURNEY_TITLES } from './journey-titles.js';
 const dayDate = (start: string, n: number) => new Date(Date.parse(`${start}T00:00:00Z`) + (n - 1) * 86_400_000).toISOString().slice(0, 10);
 
 /** What a trip has, independent of who looks at it. */
-type TripFacts = { trip: Trip; days: number; planning: Record<PlanningKey, boolean>; momentDates: Set<string> };
+type TripFacts = { trip: Trip; days: number; planning: Record<PlanningKey, boolean>; momentDays: Set<number> };
 
 const isSkippable = (key: string) => (SKIPPABLE_KEYS as readonly string[]).includes(key);
 function requireSkippable(key: string): void {
@@ -182,7 +182,7 @@ export class AchievementsService {
       const date = dayDate(facts.trip.startDate, n);
       const key = `${DAY_COMPLETED_PREFIX}${n}`;
       // A day is done once it has a photo (any order); a future day is locked until it comes.
-      drafts.push({ kind: 'day', key, title: titles.day(n), day: n, date, status: state(key, facts.momentDates.has(date), date > today), skippable: false, momentThumbs: thumbs.get(date) ?? [] });
+      drafts.push({ kind: 'day', key, title: titles.day(n), day: n, date, status: state(key, facts.momentDays.has(n), date > today), skippable: false, momentThumbs: thumbs.get(n) ?? [] });
     }
     drafts.push({ kind: 'milestone', key: TRIP_FINISHED, title: titles.trip_finished, status: state(TRIP_FINISHED, today > facts.trip.endDate, true), skippable: false });
 
@@ -264,10 +264,10 @@ export class AchievementsService {
 
   private async tripFacts(trip: Trip): Promise<TripFacts> {
     const days = daysBetween(trip.startDate, trip.endDate) + 1;
-    const [places, memberCount, momentDates] = await Promise.all([
+    const [places, memberCount, momentDays] = await Promise.all([
       this.places.find({ where: { tripId: trip.id } }),
       this.members.count({ where: { tripId: trip.id } }),
-      this.moments.readyDates(trip.id),
+      this.moments.readyDays(trip.id),
     ]);
     const plannedDays = new Set(places.map((p) => p.day).filter((d): d is number => d != null && d >= 1 && d <= days));
     return {
@@ -279,7 +279,7 @@ export class AchievementsService {
         all_days_planned: plannedDays.size === days,
         first_member_joined: memberCount >= 2,
       },
-      momentDates,
+      momentDays,
     };
   }
 
@@ -289,7 +289,7 @@ export class AchievementsService {
       const today = localIsoDate(zoneOr(zone), now);
       const keys: string[] = PLANNING_KEYS.filter((key) => facts.planning[key]);
       if (today >= trip.startDate) keys.push(TRIP_STARTED);
-      for (let n = 1; n <= facts.days; n++) if (facts.momentDates.has(dayDate(trip.startDate, n))) keys.push(`${DAY_COMPLETED_PREFIX}${n}`);
+      for (let n = 1; n <= facts.days; n++) if (facts.momentDays.has(n)) keys.push(`${DAY_COMPLETED_PREFIX}${n}`);
       if (today > trip.endDate) keys.push(TRIP_FINISHED);
       for (const key of keys) await this.unlock(userId, key, trip.id);
     }

@@ -13,9 +13,8 @@ async function run(direction: 'up' | 'down'): Promise<string[]> {
 }
 
 describe('AddJourneySkips1760800000000', () => {
-  it('runs last, after the moments', () => {
-    expect(migrations.at(-1)).toBe(AddJourneySkips1760800000000);
-    expect(migrations.at(-2)?.name).toBe('AddMoments1760700000000');
+  it('runs after the moments', () => {
+    expect(migrations.indexOf(AddJourneySkips1760800000000)).toBe(migrations.findIndex((m) => m.name === 'AddMoments1760700000000') + 1);
   });
 
   it('creates trip_journey_skips: unique per trip and key, trip CASCADE, skipper SET NULL', async () => {

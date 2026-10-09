@@ -41,18 +41,24 @@ export class MomentsController {
 
   @Post(':id/complete')
   @HttpCode(HttpStatus.OK)
-  complete(@CurrentUser() user: AuthUser, @Param('id') id: string, @StorageContext() context: StorageRequestContext): Promise<MomentDto> {
-    return this.moments.complete(user, id, context);
+  complete(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @StorageContext() context: StorageRequestContext,
+    @RequestTimezone() timeZone: string,
+  ): Promise<MomentDto> {
+    return this.moments.complete(user, id, context, timeZone);
   }
 
   @Patch(':id')
-  move(
+  patch(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Body(appValidationPipe) body: PatchMomentDto,
     @StorageContext() context: StorageRequestContext,
+    @RequestTimezone() timeZone: string,
   ): Promise<MomentDto> {
-    return this.moments.move(user, id, body.tripId, context);
+    return this.moments.patch(user, id, { tripId: body.tripId, day: body.day }, context, timeZone);
   }
 
   @Delete(':id')

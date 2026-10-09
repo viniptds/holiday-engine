@@ -25,7 +25,7 @@ export function momentsDb(): InMemoryDb {
   return aiDb()
     .define(Moment, {
       primary: ['id'],
-      generate: () => ({ createdAt: new Date(), completedAt: null, lat: null, lng: null }),
+      generate: () => ({ createdAt: new Date(), completedAt: null, lat: null, lng: null, source: 'camera', day: null }),
       relations: {
         trip: { entity: Trip, column: 'tripId', onDelete: 'SET NULL' },
         user: { entity: User, column: 'userId' },

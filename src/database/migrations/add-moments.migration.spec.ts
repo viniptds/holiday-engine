@@ -34,7 +34,8 @@ describe('AddMoments1760700000000', () => {
   it('matches the entities (checks, relations, columns)', async () => {
     const sql = (await run('up')).join('\n');
     const storage = getMetadataArgsStorage();
-    for (const check of storage.checks.filter((c) => c.target === Moment)) expect(sql).toContain(`CONSTRAINT "${check.name}" CHECK (${check.expression})`);
+    // CHK_moments_source / CHK_moments_day come with AddMomentDays1760900000000.
+    for (const check of storage.checks.filter((c) => c.target === Moment && !['CHK_moments_source', 'CHK_moments_day'].includes(c.name!))) expect(sql).toContain(`CONSTRAINT "${check.name}" CHECK (${check.expression})`);
     for (const index of storage.indices.filter((i) => i.target === Moment || i.target === UserAchievement)) expect(sql).toContain(`"${index.name}"`);
     expect(storage.relations.find((r) => r.target === Moment && r.propertyName === 'trip')?.options.onDelete).toBe('SET NULL');
     expect(storage.relations.find((r) => r.target === UserAchievement && r.propertyName === 'trip')?.options.onDelete).toBe('CASCADE');

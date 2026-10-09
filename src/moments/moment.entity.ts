@@ -3,6 +3,8 @@ import { User } from '../users/user.entity.js';
 import { Trip } from '../trips/trip.entity.js';
 
 export type MomentStatus = 'pending' | 'ready';
+/** camera: taken in the app, its day follows takenAt (locked). upload: picked from the library, its day can change. */
+export type MomentSource = 'camera' | 'upload';
 
 /**
  * A photo a user took (docs/app-moments-spec.md §2). `tripId` null = unassigned (only its author
@@ -14,6 +16,8 @@ export type MomentStatus = 'pending' | 'ready';
 @Index('IDX_moments_status_createdAt', ['status', 'createdAt'])
 @Check('CHK_moments_status', `"status" IN ('pending', 'ready')`)
 @Check('CHK_moments_byteSize', '"byteSize" BETWEEN 1 AND 10485760')
+@Check('CHK_moments_source', `"source" IN ('camera', 'upload')`)
+@Check('CHK_moments_day', '"day" >= 1')
 export class Moment {
   @PrimaryColumn('uuid', { primaryKeyConstraintName: 'PK_moments_id' })
   id: string;
@@ -35,6 +39,13 @@ export class Moment {
 
   @Column({ type: 'text' })
   status: MomentStatus;
+
+  @Column({ type: 'text', default: 'camera' })
+  source: MomentSource;
+
+  /** The trip day (1…tripDays) or null (no day). Camera: from takenAt at complete; upload: chosen. */
+  @Column({ type: 'smallint', nullable: true })
+  day: number | null;
 
   @Column({ type: 'text', unique: false })
   objectKey: string;

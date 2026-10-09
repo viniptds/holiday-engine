@@ -14,6 +14,7 @@ import { TripActivity } from '../app-trips/trip-activity.js';
 import { TripMember } from '../app-trips/trip-member.entity.js';
 import { BillingService } from '../billing/billing.service.js';
 import { Trip } from '../trips/trip.entity.js';
+import { daysBetween } from '../trips/dto/date-rules.js';
 import { Moment } from './moment.entity.js';
 import { CreateMomentDto } from './moments.dto.js';
 import {
@@ -37,6 +38,16 @@ const errorName = (error: unknown) => {
   const e = error as { name?: string; message?: string };
   return [e?.name, e?.message].filter(Boolean).join(': ').slice(0, 300) || 'unknown error';
 };
+/** Days in a trip (inclusive). */
+export const tripDayCount = (trip: Pick<Trip, 'startDate' | 'endDate'>) => daysBetween(trip.startDate, trip.endDate) + 1;
+/** The trip day of a local date, or null outside the trip. */
+export function dayOfTrip(trip: Pick<Trip, 'startDate' | 'endDate'>, date: string): number | null {
+  if (date < trip.startDate || date > trip.endDate) return null;
+  return daysBetween(trip.startDate, date) + 1;
+}
+const dayLocked = () => conflict('MOMENT_DAY_LOCKED', "A photo taken with the camera keeps the day it was taken");
+const zoneOr = (zone: string) => (isValidTimeZone(zone) ? zone : DEFAULT_TIMEZONE);
+
 const momentNotFound = () => new AppError('NOT_FOUND', 'Moment not found');
 const invalid = (fields: Record<string, string>) => new AppError('VALIDATION', 'Some fields are invalid', fields);
 /** Some time in the future is allowed for clock skew. */
@@ -55,6 +66,7 @@ export class MomentsService {
   constructor(
     @InjectRepository(Moment) private readonly moments: Repository<Moment>,
     @InjectRepository(TripMember) private readonly members: Repository<TripMember>,
+    @InjectRepository(Trip) private readonly trips: Repository<Trip>,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
     @Inject(STORAGE_CONFIG) private readonly config: StorageConfig,
     @Inject(USER_DIRECTORY) private readonly users: UserDirectory,
@@ -74,7 +86,15 @@ export class MomentsService {
     const takenAt = new Date(data.takenAt);
     if (takenAt.getTime() > Date.now() + MAX_FUTURE_SKEW_MS) throw invalid({ takenAt: 'takenAt is in the future' });
     if ((data.lat == null) !== (data.lng == null)) throw invalid({ [data.lat == null ? 'lat' : 'lng']: 'lat and lng go together' });
+    const source = data.source ?? 'camera';
+    // Camera days come from takenAt at complete: a client-sent day (even null) is refused.
+    if (source === 'camera' && data.day !== undefined) throw invalid({ day: 'day is only sent for uploads; a camera photo gets the day it was taken' });
     const trip = data.tripId ? (await this.appTrips.requireMembership(user, data.tripId)).trip! : null;
+    const day = source === 'upload' ? (data.day ?? null) : null;
+    if (day !== null) {
+      if (!trip) throw invalid({ day: 'A photo without a trip has no day' });
+      if (day > tripDayCount(trip)) throw invalid({ day: `day must be between 1 and ${tripDayCount(trip)}` });
+    }
     this.uploads.take(user.id);
 
     const id = randomUUID();
@@ -86,6 +106,8 @@ export class MomentsService {
         userId: user.id,
         tripId: trip?.id ?? null,
         status: 'pending',
+        source,
+        day,
         objectKey: momentObjectKey(user.id, id),
         contentType: data.contentType,
         byteSize: data.byteSize,
@@ -109,7 +131,7 @@ export class MomentsService {
    * missing object → 409 UPLOAD_INCOMPLETE (PUT again, then retry). A wrong size or type → 409
    * UPLOAD_MISMATCH, and the moment and object are deleted. Idempotent once ready.
    */
-  async complete(user: AuthUser, momentId: string, context: StorageRequestContext): Promise<MomentDto> {
+  async complete(user: AuthUser, momentId: string, context: StorageRequestContext, timeZone: string = DEFAULT_TIMEZONE): Promise<MomentDto> {
     const moment = await this.requireOwn(user, momentId);
     if (moment.status === 'ready') return (await this.present([moment], user, context))[0];
     const object = await this.storage.stat(moment.objectKey);
@@ -129,7 +151,8 @@ export class MomentsService {
     // A member who left the trip since keeps the photo, unassigned.
     let tripId = moment.tripId;
     if (tripId && !(await this.members.findOne({ where: { tripId, userId: user.id } }))) tripId = null;
-    await this.moments.update({ id: moment.id, status: 'pending' }, { status: 'ready', completedAt: new Date(), tripId });
+    const placed = await this.placement(moment, tripId, timeZone);
+    await this.moments.update({ id: moment.id, status: 'pending' }, { status: 'ready', completedAt: new Date(), tripId, ...placed });
     const ready = (await this.moments.findOne({ where: { id: moment.id } }))!;
     await this.activity?.emit({ type: 'moment.completed', tripId: ready.tripId, userId: user.id });
     return (await this.present([ready], user, context))[0];
@@ -148,20 +171,62 @@ export class MomentsService {
     return this.present(rows, user, context);
   }
 
-  /** Moves the uploader's moment to a trip they're a member of (its limit applies), or unassigns it. */
-  async move(user: AuthUser, momentId: string, tripId: string | null, context: StorageRequestContext): Promise<MomentDto> {
+  /**
+   * `PATCH /moments/:id`. `tripId` (uploader only) moves it to a trip they're a member of (its
+   * limit applies) or unassigns it: an upload's day resets to null, a camera day is recalculated.
+   * `day` (uploads only: camera → 409 MOMENT_DAY_LOCKED) is for the uploader or the trip owner.
+   */
+  async patch(
+    user: AuthUser,
+    momentId: string,
+    changes: { tripId?: string | null; day?: number | null },
+    context: StorageRequestContext,
+    timeZone: string = DEFAULT_TIMEZONE,
+  ): Promise<MomentDto> {
     const moment = await this.requireVisible(user, momentId);
-    if (moment.userId !== user.id) throw new AppError('FORBIDDEN', 'Only the person who took this photo can move it');
-    const trip = tripId ? (await this.appTrips.requireMembership(user, tripId)).trip! : null;
-    if ((trip?.id ?? null) !== moment.tripId) {
-      await this.moments.manager.transaction(async (manager) => {
-        await this.checkRoom(manager, user.id, trip);
-        await manager.update(Moment, { id: moment.id }, { tripId: trip?.id ?? null });
-      });
-      if (moment.status === 'ready') await this.activity?.emit({ type: 'moment.completed', tripId: trip?.id ?? null, userId: user.id });
+    if (changes.tripId === undefined && changes.day === undefined) throw invalid({ tripId: 'Send tripId or day' });
+    if (changes.tripId !== undefined) {
+      if (moment.userId !== user.id) throw new AppError('FORBIDDEN', 'Only the person who took this photo can move it');
+      const trip = changes.tripId ? (await this.appTrips.requireMembership(user, changes.tripId)).trip! : null;
+      if ((trip?.id ?? null) !== moment.tripId) {
+        const placed = moment.source === 'camera' && moment.status === 'ready' ? await this.placement(moment, trip?.id ?? null, timeZone) : { day: null };
+        await this.moments.manager.transaction(async (manager) => {
+          await this.checkRoom(manager, user.id, trip);
+          await manager.update(Moment, { id: moment.id }, { tripId: trip?.id ?? null, ...placed });
+        });
+        Object.assign(moment, { tripId: trip?.id ?? null, ...placed });
+        if (moment.status === 'ready') await this.activity?.emit({ type: 'moment.completed', tripId: trip?.id ?? null, userId: user.id });
+      }
+    }
+    if (changes.day !== undefined) {
+      if (moment.userId !== user.id && !(await this.isTripOwner(user.id, moment.tripId))) {
+        throw new AppError('FORBIDDEN', "Only the person who added this photo or the trip's owner can change its day");
+      }
+      if (moment.source === 'camera') throw dayLocked();
+      if (changes.day !== null) {
+        const trip = moment.tripId ? await this.trips.findOne({ where: { id: moment.tripId } }) : null;
+        if (!trip) throw invalid({ day: 'A photo without a trip has no day' });
+        if (changes.day > tripDayCount(trip)) throw invalid({ day: `day must be between 1 and ${tripDayCount(trip)}` });
+      }
+      if (changes.day !== moment.day) {
+        await this.moments.update({ id: moment.id }, { day: changes.day });
+        if (moment.status === 'ready' && moment.tripId) await this.activity?.emit({ type: 'moment.completed', tripId: moment.tripId, userId: moment.userId });
+      }
     }
     const updated = (await this.moments.findOne({ where: { id: moment.id } }))!;
     return (await this.present([updated], user, context))[0];
+  }
+
+  /**
+   * After a trip's dates change (in the trip update's transaction): upload days past the new length
+   * become null; camera days are recalculated from the local date they were taken on.
+   */
+  async onDatesChanged(manager: EntityManager, trip: Trip): Promise<void> {
+    const days = tripDayCount(trip);
+    for (const moment of await manager.find(Moment, { where: { tripId: trip.id } })) {
+      const day = moment.source === 'camera' ? (moment.status === 'ready' ? dayOfTrip(trip, moment.takenOn) : null) : moment.day != null && moment.day > days ? null : moment.day;
+      if (day !== (moment.day ?? null)) await manager.update(Moment, { id: moment.id }, { day });
+    }
   }
 
   /** The uploader, or the owner of the moment's trip. Other members → FORBIDDEN; anyone else → NOT_FOUND. */
@@ -202,17 +267,31 @@ export class MomentsService {
     return removed;
   }
 
-  /** Signed thumbnails for the Journey: the trip's ready moments taken on `dates`, newest first, up to `per` a day. */
-  async thumbsByDay(tripId: string, per: number, context: StorageRequestContext): Promise<Map<string, string[]>> {
+  /** Signed thumbnails for the Journey: the trip's ready moments by `day` (both sources), newest first, up to `per` a day. */
+  async thumbsByDay(tripId: string, per: number, context: StorageRequestContext): Promise<Map<number, string[]>> {
     const rows = await this.moments.find({ where: { tripId, status: 'ready' }, order: { takenAt: 'DESC', createdAt: 'DESC' } });
-    const byDay = new Map<string, string[]>();
+    const byDay = new Map<number, string[]>();
     for (const row of rows) {
-      const list = byDay.get(row.takenOn) ?? [];
+      if (row.day == null) continue;
+      const list = byDay.get(row.day) ?? [];
       if (list.length >= per) continue;
       list.push(await this.storage.presignDownload(row.objectKey, context));
-      byDay.set(row.takenOn, list);
+      byDay.set(row.day, list);
     }
     return byDay;
+  }
+
+  /** A camera moment's day on `tripId` from takenAt in `timeZone` (the uploader's); an upload keeps its day. */
+  private async placement(moment: Moment, tripId: string | null, timeZone: string): Promise<{ day: number | null; takenOn?: string }> {
+    if (moment.source !== 'camera') return { day: tripId === moment.tripId ? (moment.day ?? null) : null };
+    const takenOn = localIsoDate(zoneOr(timeZone), new Date(moment.takenAt));
+    const trip = tripId ? await this.trips.findOne({ where: { id: tripId } }) : null;
+    return { day: trip ? dayOfTrip(trip, takenOn) : null, takenOn };
+  }
+
+  private async isTripOwner(userId: string, tripId: string | null): Promise<boolean> {
+    if (!tripId) return false;
+    return (await this.members.findOne({ where: { tripId, userId } }))?.role === 'owner';
   }
 
   /** Room for one more moment on `trip` (its owner's plan) or among the user's unassigned ones, under a lock. */
@@ -275,6 +354,10 @@ export class MomentsService {
 
   private async present(rows: Moment[], viewer: AuthUser, context: StorageRequestContext): Promise<MomentDto[]> {
     const profiles = await this.users.getProfiles([...new Set(rows.map((m) => m.userId))]);
+    const tripIds = [...new Set(rows.map((m) => m.tripId).filter((id): id is string => !!id))];
+    const owned = new Set(
+      tripIds.length ? (await this.members.find({ where: { tripId: In(tripIds), userId: viewer.id, role: 'owner' } })).map((m) => m.tripId) : [],
+    );
     return Promise.all(
       rows.map(async (m) => {
         const profile = profiles.get(m.userId);
@@ -283,6 +366,9 @@ export class MomentsService {
           id: m.id,
           tripId: m.tripId ?? null,
           status: m.status,
+          source: m.source ?? 'camera',
+          day: m.day ?? null,
+          dayEditable: m.source === 'upload' && (mine || (!!m.tripId && owned.has(m.tripId))),
           author: { userId: m.userId, displayName: profile?.displayName ?? 'Traveler', avatarUrl: profile?.avatarUrl ?? null },
           mine,
           contentType: m.contentType,
@@ -305,9 +391,9 @@ export class MomentsService {
     return this.moments.count({ where: { userId, status: 'ready' } });
   }
 
-  /** The trip's ready moments' local dates (for `day_completed:<n>`). */
-  async readyDates(tripId: string): Promise<Set<string>> {
-    return new Set((await this.moments.find({ where: { tripId, status: 'ready' } })).map((m) => m.takenOn));
+  /** The trip days that have a ready moment, either source (for `day_completed:<n>`). */
+  async readyDays(tripId: string): Promise<Set<number>> {
+    return new Set((await this.moments.find({ where: { tripId, status: 'ready' } })).map((m) => m.day).filter((d): d is number => d != null));
   }
 
   /** Ready moments on any of these trips (unused ids are fine). */
