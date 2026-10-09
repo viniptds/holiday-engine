@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Start with docs/repo-map.md; regenerate it with `npm run repo-map` after changes.
+
 ## Product intent
 
 This is a NestJS engine behind the holiday bot. It's a travel management platform: it saves trip details and suggests nearby events during the trip.
