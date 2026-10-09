@@ -68,10 +68,10 @@ AI trip planner: conversations/messages, itinerary and trip places, LLM provider
 - Provider GooglePlacesProvider `places/google-places.provider.ts`
 - Provider MockPlacesProvider `places/mock-places.provider.ts`
 - Verifier PlacesVerifier `places/places-verifier.ts`
-- Dtos (8): AddPlaceDto, ConfirmAiConversationDto, ItineraryDayDto, PatchPlaceDto, PostAiMessageDto, PutItineraryDto, SearchPlacesQueryDto, StartAiConversationDto · in dto/ai-message.dto.ts, dto/places.dto.ts
-- fns: aiConfigFrom, backoffMs, buildSystemPrompt, compareTripPlaces, createLlmProvider, createPlacesProvider, deriveCategory, distanceKm, mapLimit, normalizeDraft, normalizeName, parseModelDraft, postJson, readAiConfig, realSleep, replayText, retryAfterMs, toConversationDto, toLlmHistory, toTripPlaceDto, toTurnDto, tripDays
-- types: AiConfig, AiConversationDto, AiEffort, AiFallbacks, AiTurnDto, AnthropicOptions, ConversationStatus, DraftPlace, DraftTurnInput, DraftTurnResult, FetchFn, ItineraryDto, JsonSchema, LatLng, LinkedTripContext, LlmHistoryEntry, LlmProvider, LlmProviderName, MessageRole, ModelDraft, NewTripPlace, OpenAiOptions, PlaceCategory, PlaceListSearch, PlaceMatch, PlaceSearch, PlaceSearchResultDto, PlaceSource, PlacesDirectory, PlacesProvider, +8 more
-- consts: AI_CONFIG, AI_EFFORTS, AI_FALLBACK_MODES, ANTHROPIC_FALLBACK_BETA, ANTHROPIC_MESSAGES_URL, ANTHROPIC_VERSION, CHECKLIST_SUGGESTIONS_SCHEMA, CONVERSATION_STATUSES, DEFAULT_ANTHROPIC_MODEL, GOOGLE_DETAILS_FIELD_MASK, GOOGLE_FIELD_MASK, GOOGLE_PLACE_DETAILS_URL, GOOGLE_SEARCH_TEXT_URL, INCLUDED_TYPE, LLM_PROVIDER, LLM_PROVIDERS, MAX_DISTANCE_KM, MAX_DRAFT_PLACES, MAX_DRAFT_QUESTIONS, MAX_LISTED_CONVERSATIONS, MAX_MESSAGE_LENGTH, MAX_SEARCH_RESULTS, MAX_TRIP_PLACES, MAX_TURN_ATTEMPTS, MAX_USER_MESSAGES_PER_CONVERSATION, MESSAGE_ROLES, MOCK_CENTER, MOCK_FAR_PREFIX, MOCK_MISSING_PREFIX, MODEL_DRAFT_SCHEMA, +10 more
+- Dtos (9): AddPlaceDto, ConfirmAiConversationDto, ItineraryDayDto, ListConversationsQueryDto, PatchPlaceDto, PostAiMessageDto, PutItineraryDto, SearchPlacesQueryDto, StartAiConversationDto · in dto/ai-message.dto.ts, dto/places.dto.ts
+- fns: aiConfigFrom, backoffMs, buildSystemPrompt, compareTripPlaces, createLlmProvider, createPlacesProvider, deriveCategory, distanceKm, mapLimit, normalizeDraft, normalizeName, parseModelDraft, postJson, readAiConfig, realSleep, replayText, retryAfterMs, summarize, toConversationDto, toLlmHistory, toTripPlaceDto, toTurnDto, tripDays
+- types: AiConfig, AiConversationDto, AiConversationSummary, AiEffort, AiFallbacks, AiTurnDto, AnthropicOptions, ConversationStatus, DraftPlace, DraftSummary, DraftTurnInput, DraftTurnResult, FetchFn, ItineraryDto, JsonSchema, LatLng, LinkedTripContext, LlmHistoryEntry, LlmProvider, LlmProviderName, MessageRole, ModelDraft, NewTripPlace, OpenAiOptions, PlaceCategory, PlaceListSearch, PlaceMatch, PlaceSearch, PlaceSearchResultDto, PlaceSource, +10 more
+- consts: AI_CONFIG, AI_EFFORTS, AI_FALLBACK_MODES, ANTHROPIC_FALLBACK_BETA, ANTHROPIC_MESSAGES_URL, ANTHROPIC_VERSION, CHECKLIST_SUGGESTIONS_SCHEMA, CONVERSATION_STATUSES, DEFAULT_ANTHROPIC_MODEL, GOOGLE_DETAILS_FIELD_MASK, GOOGLE_FIELD_MASK, GOOGLE_PLACE_DETAILS_URL, GOOGLE_SEARCH_TEXT_URL, INCLUDED_TYPE, LAST_MESSAGE_PREVIEW_LENGTH, LLM_PROVIDER, LLM_PROVIDERS, MAX_DISTANCE_KM, MAX_DRAFT_PLACES, MAX_DRAFT_QUESTIONS, MAX_LISTED_CONVERSATIONS, MAX_MESSAGE_LENGTH, MAX_SEARCH_RESULTS, MAX_TRIP_PLACES, MAX_TURN_ATTEMPTS, MAX_USER_MESSAGES_PER_CONVERSATION, MESSAGE_ROLES, MOCK_CENTER, MOCK_FAR_PREFIX, MOCK_MISSING_PREFIX, +11 more
 - test helpers: aiDb, aiTestingModule
 
 ## src/app-common/
@@ -190,6 +190,27 @@ Bot-side suggested events near a trip (providers, service).
 - fns: addUtcDays, createEventsProvider, endOfUtcDay, formatDateOnly, normalizeCity, parseDateOnly, requestWindow, scheduledWindow, startOfUtcDay
 - types: Event, EventsProvider, EventsSearch, EventsTrip, EventsWindow
 - consts: EVENTS_PROVIDER, REQUEST_SUGGESTIONS_LIMIT, REQUEST_WINDOW_DAYS, SCHEDULED_SEARCH_LIMIT, SCHEDULED_SUGGESTIONS_LIMIT
+
+## src/home/
+
+- Service BannersService `banners.service.ts`
+- Class DestinationCatalog `catalog.ts`
+- Service CopyRefreshService `copy-refresh.service.ts`
+- Service HolidaysService `holidays.service.ts`
+- Entity HomeCopy `home-copy.entity.ts` · table `home_copy`
+- Controller HomeController `home.controller.ts`
+  - GET /app/v1/home → home
+  - GET /app/v1/home/weather → weather
+  - GET /app/v1/home/banners → banners
+- Module HomeModule `home.module.ts`
+- Service TrendingService `trending.service.ts`
+- Error WeatherUnavailableError `weather.service.ts`
+- Service WeatherService `weather.service.ts`
+- Dtos (2): BannersQueryDto, WeatherQueryDto · in home.dto.ts
+- fns: bigTripHorizon, bucketOf, copyProblems, countryName, distanceKm, fill, homeConfigFrom, isEligible, isoWeek, loadCatalog, loadCopy, localeRegion, longWeekendDays, monthName, parseCatalog, parseCopyFile, parseForecast, parseHolidays, placeholdersIn, readHomeConfig, roundCoordinate, routeText, scoreDestination, seededRandom, timezoneCity, weatherCodeOf, weatherText, wordCount
+- types: BannerAngle, BannerDto, BannerFacts, BannerTier, BannersDto, BigTripAngle, CatalogTag, CopyPlaceholder, CopySet, CopyTemplate, CopyValues, Destination, DestinationKind, Forecast, HomeConfig, HomeCopyVariant, HomeDto, Position, PublicHoliday, RefreshResult, TrendingEntry, WeatherCode, WeatherDto
+- consts: BANNERS_CACHE_SIZE, BANNERS_TTL_MS, BANNER_TIERS, BIG_TRIP_ANGLES, BIG_TRIP_HORIZONS, BIG_TRIP_MIN_KM, CATALOG_TAGS, COPY_PLACEHOLDERS, CTA, DEFAULT_CATALOG_PATH, DEFAULT_COPY_DIR, DEFAULT_HOME_COPY_AI_MAX_PER_NIGHT, DEFAULT_WEATHER_CACHE_MINUTES, DESTINATION_CATALOG, DESTINATION_KINDS, EYEBROWS, HOLIDAYS_CACHE_SIZE, HOLIDAYS_TTL_MS, HOLIDAY_LOOKAHEAD_DAYS, HOME_CONFIG, HOME_COPY, HOME_COPY_DESTINATION_PREFIX, HOME_COPY_REFRESH_CRON, HOME_COPY_REFRESH_JOB, HOME_COPY_SCHEMA, HOME_COPY_TTL_MS, HOME_COPY_VARIANTS, HOME_FETCH, HOME_FETCH_TIMEOUT_MS, LONG_WEEKEND_MAX_KM, +21 more
+- test helpers: ANA, BEN, FakeApis, HOLIDAYS, LISBON, NOW, USERS, bootHome, homeDb, homeTestingModule, json, openMeteoBody
 
 ## src/idempotency/
 Idempotency-Key interceptor and stored keys for offline-safe writes.
@@ -408,6 +429,7 @@ Registered in `src/database/migrations/index.ts` (a new migration must be added 
 17. AddMomentDays1760900000000 · `1760900000000-add-moment-days.ts`
 18. AddNotificationsChecklist1761000000000 · `1761000000000-add-notifications-checklist.ts`
 19. AddAvatarIdempotency1761100000000 · `1761100000000-add-avatar-idempotency.ts`
+20. AddHomeCopy1761200000000 · `1761200000000-add-home-copy.ts`
 
 ## Env variables read
 Found via `config.get(...)`, `process.env.X`, env key lists and similar readers. Name · files.
@@ -432,6 +454,9 @@ Found via `config.get(...)`, `process.env.X`, env key lists and similar readers.
 - FREE_TRIP_PLACES_LIMIT · billing/billing.config.ts
 - GOOGLE_CLIENT_IDS · auth/google-token-verifier.ts
 - GOOGLE_PLACES_API_KEY · ai/ai.config.ts
+- HOME_COPY_AI_MAX_PER_NIGHT · home/home.config.ts
+- HOME_COPY_AI_REFRESH · home/home.config.ts
+- HOME_WEATHER_CACHE_MINUTES · home/home.config.ts
 - HTTP_KEEP_ALIVE_TIMEOUT_MS · main.ts
 - JWT_SECRET · auth/auth.module.ts, moments/moments.module.ts, notifications/notifications.service.ts
 - MAILJET_API_KEY · mail/drivers/mailjet.driver.ts
