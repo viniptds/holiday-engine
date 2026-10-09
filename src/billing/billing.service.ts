@@ -16,7 +16,7 @@ import type { BillingProvider, RevenueCatSubscriber } from './revenuecat.js';
 import { concernsEntitlement, HANDLED_EVENTS, isPlusState, stateAfterEvent, stateFromSubscriber } from './entitlement-state.js';
 import type { EntitlementState, RevenueCatEvent } from './entitlement-state.js';
 import { SYNC_RATE_LIMIT } from './billing.types.js';
-import type { PlanDto } from './billing.types.js';
+import type { PlanDto, PlanLimitsDto } from './billing.types.js';
 
 /** Transaction-scoped advisory lock (as the AI and invite limits use). */
 const ADVISORY_XACT_LOCK = 'SELECT pg_advisory_xact_lock(hashtext($1))';
@@ -68,6 +68,19 @@ export class BillingService {
   /** The place limit of a trip, by its OWNER's plan (editors follow the owner). */
   async tripPlacesLimit(ownerUserId: string | null, manager?: EntityManager, now = new Date()): Promise<number> {
     return this.placesLimit(ownerUserId ? await this.isPlus(ownerUserId, now, manager) : false);
+  }
+
+  /** Photos a trip may hold for its owner's plan. */
+  momentsLimit(plus: boolean): number {
+    return plus ? this.config.plusMomentsPerTrip : this.config.freeMomentsPerTrip;
+  }
+
+  /** `/me` → `planLimits`: what each plan gets, from the configured limits. */
+  planLimits(): PlanLimitsDto {
+    return {
+      free: { aiMessagesPerDay: this.config.freeAiMessagesPerDay, tripPlaces: this.placesLimit(false), tripMoments: this.momentsLimit(false) },
+      plus: { tripPlaces: this.placesLimit(true), tripMoments: this.momentsLimit(true) },
+    };
   }
 
   get freeAiMessagesPerDay(): number {

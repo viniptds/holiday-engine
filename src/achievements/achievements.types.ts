@@ -1,5 +1,5 @@
 /** Per trip, planning: unlocked for every member of the trip. */
-export const PLANNING_KEYS = ['trip_created', 'first_place', 'all_days_planned', 'first_member_joined'] as const;
+export const PLANNING_KEYS = ['trip_created', 'first_place', 'all_days_planned', 'first_member_joined', 'checklist_created'] as const;
 export type PlanningKey = (typeof PLANNING_KEYS)[number];
 /** Per trip, date-based (each member's own time zone). `day_completed:<n>` too. */
 export const TRIP_STARTED = 'trip_started';
@@ -33,10 +33,16 @@ export type AchievementDto = { key: string; tripId: string | null; unlockedAt: s
  */
 export type JourneyNodeStatus = 'done' | 'skipped' | 'current' | 'todo' | 'locked';
 /** The only steps that can be skipped (for the whole trip, by owners and editors). */
-export const SKIPPABLE_KEYS = ['first_member_joined', 'all_days_planned'] as const;
+export const SKIPPABLE_KEYS = ['first_member_joined', 'all_days_planned', 'checklist_created'] as const;
 export type SkippableKey = (typeof SKIPPABLE_KEYS)[number];
 export type JourneyMember = { userId: string; displayName: string; avatarUrl: string | null; role: 'owner' | 'editor' | 'viewer' | null };
-export type JourneyDto = { nodes: JourneyNode[]; achievements: AchievementDto[]; progress: { resolved: number; total: number } };
+export type JourneyDto = {
+  nodes: JourneyNode[];
+  achievements: AchievementDto[];
+  progress: { resolved: number; total: number };
+  /** Whole days from today (the request's time zone) to the start date: 0 on the start day, negative once started, null after the trip ends. */
+  startsInDays: number | null;
+};
 export type JourneyNode = {
   kind: 'milestone' | 'day';
   key: string;

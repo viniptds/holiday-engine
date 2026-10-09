@@ -4,12 +4,15 @@ import { Injectable, Logger } from '@nestjs/common';
  * Writes other features react to after they're committed (achievements). `userId` is who did it.
  * - `trip.saved`: a trip was created or updated;
  * - `trip.itinerary`: its places changed (add, patch, delete, PUT, AI confirm);
+ * - `checklist.changed`: items were added to its checklist;
  * - `member.joined`: `userId` joined `tripId`;
  * - `moment.completed`: `userId`'s moment became ready (or moved) on `tripId` (null = unassigned).
  */
 export type TripActivityEvent =
   | { type: 'trip.saved'; tripId: string; userId: string }
   | { type: 'trip.itinerary'; tripId: string; userId: string }
+  /** Checklist items were added (manual, bulk or AI-suggested). */
+  | { type: 'checklist.changed'; tripId: string; userId: string }
   | { type: 'member.joined'; tripId: string; userId: string }
   /** `quiet`: a change that isn't news for the other members (a photo's day changed). */
   | { type: 'moment.completed'; tripId: string | null; userId: string; quiet?: boolean }

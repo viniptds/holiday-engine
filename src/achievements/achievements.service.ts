@@ -35,6 +35,7 @@ import {
 } from './achievements.types.js';
 import { SKIPPABLE_KEYS } from './achievements.types.js';
 import type { AchievementDto, JourneyDto, JourneyMember, JourneyNode, JourneyNodeStatus, PlanningKey } from './achievements.types.js';
+import { ChecklistItem } from '../checklist/checklist.entities.js';
 import { TripJourneySkip } from './trip-journey-skip.entity.js';
 import { AppError } from '../app-common/app-error.js';
 import { JOURNEY_TITLES } from './journey-titles.js';
@@ -48,7 +49,7 @@ type TripFacts = { trip: Trip; days: number; planning: Record<PlanningKey, boole
 const isSkippable = (key: string) => (SKIPPABLE_KEYS as readonly string[]).includes(key);
 function requireSkippable(key: string): void {
   if (!isSkippable(key)) {
-    throw new AppError('VALIDATION', 'Some fields are invalid', { key: `Only ${SKIPPABLE_KEYS.join(' and ')} can be skipped` }, { reason: 'STEP_NOT_SKIPPABLE' });
+    throw new AppError('VALIDATION', 'Some fields are invalid', { key: `Only ${SKIPPABLE_KEYS.slice(0, -1).join(', ')} and ${SKIPPABLE_KEYS[SKIPPABLE_KEYS.length - 1]} can be skipped` }, { reason: 'STEP_NOT_SKIPPABLE' });
   }
 }
 
@@ -70,6 +71,7 @@ export class AchievementsService {
     @InjectRepository(TripMember) private readonly members: Repository<TripMember>,
     @InjectRepository(TripPlace) private readonly places: Repository<TripPlace>,
     @InjectRepository(User) private readonly users: Repository<User>,
+    @InjectRepository(ChecklistItem) private readonly checklist: Repository<ChecklistItem>,
     @InjectRepository(TripJourneySkip) private readonly skips: Repository<TripJourneySkip>,
     @Inject(USER_DIRECTORY) private readonly directory: UserDirectory,
     private readonly appTrips: AppTripsService,
@@ -89,6 +91,7 @@ export class AchievementsService {
         return;
       }
       case 'trip.itinerary':
+      case 'checklist.changed':
         await this.evaluateTrip(event.tripId, now);
         return;
       case 'member.joined':
@@ -206,7 +209,8 @@ export class AchievementsService {
     const resolved = nodes.filter((n) => n.status === 'done' || n.status === 'skipped').length;
 
     const rows = await this.achievements.find({ where: { userId: user.id, tripId: facts.trip.id }, order: { unlockedAt: 'ASC' } });
-    return { nodes, achievements: rows.map(toDto), progress: { resolved, total: nodes.length } };
+    const startsInDays = today > facts.trip.endDate ? null : daysBetween(today, facts.trip.startDate);
+    return { nodes, achievements: rows.map(toDto), progress: { resolved, total: nodes.length }, startsInDays };
   }
 
   /** The members who skipped steps, as MemberSummary-like values (role null if they left). */
@@ -268,10 +272,11 @@ export class AchievementsService {
 
   private async tripFacts(trip: Trip): Promise<TripFacts> {
     const days = daysBetween(trip.startDate, trip.endDate) + 1;
-    const [places, memberCount, momentDays] = await Promise.all([
+    const [places, memberCount, momentDays, checklistItems] = await Promise.all([
       this.places.find({ where: { tripId: trip.id } }),
       this.members.count({ where: { tripId: trip.id } }),
       this.moments.readyDays(trip.id),
+      this.checklist.count({ where: { tripId: trip.id } }),
     ]);
     const plannedDays = new Set(places.map((p) => p.day).filter((d): d is number => d != null && d >= 1 && d <= days));
     return {
@@ -282,6 +287,7 @@ export class AchievementsService {
         first_place: places.length > 0,
         all_days_planned: plannedDays.size === days,
         first_member_joined: memberCount >= 2,
+        checklist_created: checklistItems > 0,
       },
       momentDays,
     };

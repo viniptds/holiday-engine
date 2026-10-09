@@ -13,6 +13,9 @@ export type BillingConfig = {
   entitlementId: string;
   freeAiMessagesPerDay: number;
   freeTripPlacesLimit: number;
+  /** Photos per trip by the owner's plan (same settings and defaults as the moments storage config). */
+  freeMomentsPerTrip: number;
+  plusMomentsPerTrip: number;
 };
 
 type Env = Record<string, string | undefined>;
@@ -22,6 +25,14 @@ function nonNegativeInt(env: Env, name: string, fallback: number, max = Number.M
   if (!raw) return fallback;
   const value = Number(raw);
   if (!/^\d+$/.test(raw) || value > max) throw new Error(`${name} must be a whole number between 0 and ${max}`);
+  return value;
+}
+
+function momentsCount(env: Env, name: string, fallback: number): number {
+  const raw = env[name]?.trim();
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1 || value > 100_000) throw new Error(`${name} must be a whole number from 1 to 100000`);
   return value;
 }
 
@@ -49,6 +60,8 @@ export function readBillingConfig(env: Env): BillingConfig {
     entitlementId: env.REVENUECAT_ENTITLEMENT_ID?.trim() || 'plus',
     freeAiMessagesPerDay: nonNegativeInt(env, 'FREE_AI_MESSAGES_PER_DAY', 10),
     freeTripPlacesLimit,
+    freeMomentsPerTrip: momentsCount(env, 'FREE_MOMENTS_PER_TRIP', 50),
+    plusMomentsPerTrip: momentsCount(env, 'PLUS_MOMENTS_PER_TRIP', 1000),
   };
 }
 
@@ -60,6 +73,8 @@ const BILLING_ENV_KEYS = [
   'REVENUECAT_ENTITLEMENT_ID',
   'FREE_AI_MESSAGES_PER_DAY',
   'FREE_TRIP_PLACES_LIMIT',
+  'FREE_MOMENTS_PER_TRIP',
+  'PLUS_MOMENTS_PER_TRIP',
 ];
 
 export const billingConfigFrom = (config: ConfigService): BillingConfig =>
