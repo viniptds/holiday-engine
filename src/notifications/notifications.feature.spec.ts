@@ -36,6 +36,10 @@ describe('Notifications (feature)', () => {
       customize: (b) => b.overrideProvider(PUSH_PROVIDER).useValue(push).overrideProvider(MAIL_TRANSPORT).useValue(mail),
     });
     service = h.moduleRef.get(NotificationsService);
+    // The default fixture trip starts in 30 days, which collides with the 30-day countdown job on some dates.
+    // Default to a trip far enough out that no countdown is due; specs that test countdowns pass their own dates.
+    const seedTrip = h.seedTrip;
+    h.seedTrip = (members, fields) => seedTrip(members, { startDate: isoIn(90), endDate: isoIn(92), ...fields });
   });
 
   afterAll(async () => {
