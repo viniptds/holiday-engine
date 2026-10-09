@@ -357,7 +357,8 @@ describe('Holid.ai Plus (feature)', () => {
         id: ALICE,
         plan: { tier: 'free', status: null, expiresAt: null, willRenew: null, store: null },
         aiQuota: { limit: 10, used: 0, remaining: 10, resetsAt: localDayBounds('Pacific/Auckland').end.toISOString() },
-        limits: { tripPlaces: 15 },
+        limits: { tripPlaces: 15, tripMoments: 50 },
+        planLimits: { free: { aiMessagesPerDay: 10, tripPlaces: 15, tripMoments: 50 }, plus: { tripPlaces: 200, tripMoments: 1000 } },
       });
     });
 
@@ -367,13 +368,14 @@ describe('Holid.ai Plus (feature)', () => {
       expect(await json(await call('GET', '/me', ALICE))).toMatchObject({
         plan: { tier: 'plus', status: 'active', willRenew: false, store: 'play_store' },
         aiQuota: { limit: null, used: 0, remaining: null },
-        limits: { tripPlaces: 200 },
+        limits: { tripPlaces: 200, tripMoments: 1000 },
+        planLimits: { free: { aiMessagesPerDay: 10, tripPlaces: 15, tripMoments: 50 }, plus: { tripPlaces: 200, tripMoments: 1000 } },
       });
     });
 
     it('an expired subscription: tier free, status expired', async () => {
       grantPlus(ALICE, { status: 'expired', expiresAt: new Date(Date.now() - DAY) });
-      expect(await json(await call('GET', '/me', ALICE))).toMatchObject({ plan: { tier: 'free', status: 'expired' }, limits: { tripPlaces: 15 } });
+      expect(await json(await call('GET', '/me', ALICE))).toMatchObject({ plan: { tier: 'free', status: 'expired' }, limits: { tripPlaces: 15, tripMoments: 50 } });
     });
 
     it('stores a valid X-Timezone, keeps it when the header is missing or invalid', async () => {

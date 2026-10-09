@@ -9,6 +9,8 @@ describe('readBillingConfig', () => {
       entitlementId: 'plus',
       freeAiMessagesPerDay: 10,
       freeTripPlacesLimit: 15,
+      freeMomentsPerTrip: 50,
+      plusMomentsPerTrip: 1000,
     });
   });
 
@@ -44,5 +46,13 @@ describe('readBillingConfig', () => {
     [{ FREE_TRIP_PLACES_LIMIT: '201' }, 'FREE_TRIP_PLACES_LIMIT'],
   ])('rejects %j', (env, message) => {
     expect(() => readBillingConfig(env)).toThrow(message);
+  });
+});
+
+describe('readBillingConfig photo limits', () => {
+  it('reads FREE_MOMENTS_PER_TRIP and PLUS_MOMENTS_PER_TRIP, and rejects bad values by name', () => {
+    expect(readBillingConfig({ FREE_MOMENTS_PER_TRIP: '20', PLUS_MOMENTS_PER_TRIP: '500' })).toMatchObject({ freeMomentsPerTrip: 20, plusMomentsPerTrip: 500 });
+    expect(() => readBillingConfig({ FREE_MOMENTS_PER_TRIP: '0' })).toThrow('FREE_MOMENTS_PER_TRIP');
+    expect(() => readBillingConfig({ PLUS_MOMENTS_PER_TRIP: 'many' })).toThrow('PLUS_MOMENTS_PER_TRIP');
   });
 });

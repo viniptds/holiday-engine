@@ -13,6 +13,12 @@ export type PlanDto = {
 export type AiQuotaDto = { limit: number | null; used: number; remaining: number | null; resetsAt: string };
 
 /** `/me` → `limits`. */
-export type LimitsDto = { tripPlaces: number };
+export type LimitsDto = { tripPlaces: number; tripMoments: number };
+
+/** `/me` → `planLimits`: the limits of each plan, for the comparison paywall. */
+export type PlanLimitsDto = {
+  free: { aiMessagesPerDay: number; tripPlaces: number; tripMoments: number };
+  plus: { tripPlaces: number; tripMoments: number };
+};
 
 export const SYNC_RATE_LIMIT = { max: 20, windowMs: 60 * 60 * 1000 };

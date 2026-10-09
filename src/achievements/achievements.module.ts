@@ -7,6 +7,7 @@ import { TripMember } from '../app-trips/trip-member.entity.js';
 import { TripPlace } from '../ai/entities/trip-place.entity.js';
 import { MediaModule } from '../media/media.module.js';
 import { MomentsModule } from '../moments/moments.module.js';
+import { ChecklistItem } from '../checklist/checklist.entities.js';
 import { Trip } from '../trips/trip.entity.js';
 import { User } from '../users/user.entity.js';
 import { UserAchievement } from './user-achievement.entity.js';
@@ -16,7 +17,7 @@ import { AchievementsController, JourneyController, MyAchievementsController } f
 
 /** Achievements and the Journey path (docs/app-moments-spec.md §3). */
 @Module({
-  imports: [TypeOrmModule.forFeature([UserAchievement, TripJourneySkip, Trip, TripMember, TripPlace, User]), AuthModule, AppTripsModule, MomentsModule, MediaModule],
+  imports: [TypeOrmModule.forFeature([UserAchievement, TripJourneySkip, Trip, TripMember, TripPlace, User, ChecklistItem]), AuthModule, AppTripsModule, MomentsModule, MediaModule],
   controllers: [AchievementsController, MyAchievementsController, JourneyController],
   providers: [AchievementsService],
   exports: [AchievementsService],

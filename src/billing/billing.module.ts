@@ -48,7 +48,8 @@ export class BillingModule implements OnModuleInit {
       return {
         plan,
         aiQuota: await this.quota.status(user.id, plus, timeZone, now),
-        limits: { tripPlaces: this.billing.placesLimit(plus) },
+        limits: { tripPlaces: this.billing.placesLimit(plus), tripMoments: this.billing.momentsLimit(plus) },
+        planLimits: this.billing.planLimits(),
       };
     });
   }

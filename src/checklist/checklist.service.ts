@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isUUID } from 'class-validator';
 import { EntityManager, In, Repository } from 'typeorm';
@@ -7,6 +7,7 @@ import type { AuthUser } from '../app-common/auth-user.js';
 import type { Locale } from '../app-common/locale.js';
 import { RateWindow } from '../app-common/rate-window.js';
 import { AppTripsService } from '../app-trips/app-trips.service.js';
+import { TripActivity } from '../app-trips/trip-activity.js';
 import { AI_CONFIG } from '../ai/ai.config.js';
 import type { AiConfig } from '../ai/ai.config.js';
 import { CHECKLIST_SUGGESTIONS_SCHEMA } from '../ai/checklist-schema.js';
@@ -57,6 +58,7 @@ export class ChecklistService {
     private readonly appTrips: AppTripsService,
     @Inject(LLM_PROVIDER) private readonly llm: LlmProvider,
     @Inject(AI_CONFIG) private readonly ai: AiConfig,
+    @Optional() private readonly activity?: TripActivity,
   ) {}
 
   async list(user: AuthUser, tripId: string): Promise<{ items: ChecklistItemDto[]; myReminders: ReminderDto[] }> {
@@ -208,6 +210,7 @@ export class ChecklistService {
       }
       return created;
     });
+    await this.activity?.emit({ type: 'checklist.changed', tripId: trip!.id, userId: user.id });
     const saved = await this.items.find({ where: { id: In(ids) } });
     return ids.map((id) => toItemDto(saved.find((s) => s.id === id)!));
   }

@@ -12,12 +12,13 @@ import type { CreatedMomentDto } from '../moments/moments.types.js';
 import { User } from '../users/user.entity.js';
 import { AchievementsService } from './achievements.service.js';
 import { UserAchievement } from './user-achievement.entity.js';
+import { ChecklistItem } from '../checklist/checklist.entities.js';
 import { TripJourneySkip } from './trip-journey-skip.entity.js';
 import type { AchievementDto, JourneyNode } from './achievements.types.js';
 import { RateWindow } from '../app-common/rate-window.js';
 import { EVENT_RATE_LIMIT } from './achievements.types.js';
 
-type Journey = { nodes: JourneyNode[]; achievements: AchievementDto[]; progress: { resolved: number; total: number } };
+type Journey = { nodes: JourneyNode[]; achievements: AchievementDto[]; progress: { resolved: number; total: number }; startsInDays: number | null };
 
 describe('Achievements and the Journey (feature)', () => {
   const storage = new MemoryObjectStorage();
@@ -275,6 +276,95 @@ describe('Achievements and the Journey (feature)', () => {
     });
   });
 
+  describe('checklist_created', () => {
+    const items = (tripId: string, user: string) => h.json('POST', `/trips/${tripId}/checklist`, user, { title: 'Passport' });
+
+    it('stays locked on an empty list and unlocks on the first manual item, for every member', async () => {
+      const trip = await createTrip(OWNER);
+      await join(trip.id, EDITOR);
+      expect(keys(OWNER, trip.id)).not.toContain('checklist_created');
+      await h.json('GET', `/trips/${trip.id}/journey`, OWNER);
+      expect(keys(OWNER, trip.id)).not.toContain('checklist_created');
+
+      expect((await items(trip.id, EDITOR)).status).toBe(201);
+
+      expect(keys(OWNER, trip.id)).toContain('checklist_created');
+      expect(keys(EDITOR, trip.id)).toContain('checklist_created');
+    });
+
+    it('unlocks on a bulk (AI) add', async () => {
+      const trip = await createTrip(OWNER);
+
+      const res = await h.json('POST', `/trips/${trip.id}/checklist/bulk`, OWNER, { items: [{ title: 'Sunscreen' }, { title: 'Adapter' }] });
+
+      expect(res.status).toBe(201);
+      expect(keys(OWNER, trip.id)).toContain('checklist_created');
+    });
+
+    it('is also found lazily on a Journey read (an item written without an event)', async () => {
+      const trip = h.seedTrip([[OWNER, 'owner']], { startDate: isoDay(5), endDate: isoDay(5) });
+      h.db.seed(ChecklistItem, { tripId: trip.id, title: 'Passport', notes: null, priority: 'medium', category: 'other', done: false, doneBy: null, doneAt: null, position: 0, source: 'user', createdBy: OWNER });
+
+      const { body } = await h.json<Journey>('GET', `/trips/${trip.id}/journey`, OWNER);
+
+      expect(body.nodes.find((n) => n.key === 'checklist_created')?.status).toBe('done');
+      expect(keys(OWNER, trip.id)).toContain('checklist_created');
+    });
+
+    it('is not awarded by a rejected write (a viewer, or an empty bulk)', async () => {
+      const trip = h.seedTrip([[OWNER, 'owner'], [VIEWER, 'viewer']]);
+
+      expect((await items(trip.id, VIEWER)).status).toBe(403);
+      expect((await h.json('POST', `/trips/${trip.id}/checklist/bulk`, OWNER, { items: [] })).status).toBe(400);
+
+      expect(keys(OWNER, trip.id)).not.toContain('checklist_created');
+    });
+  });
+
+  describe('startsInDays', () => {
+    const at = (iso: string) => new Date(iso);
+    const ctx = { baseUrl: 'http://localhost' };
+    const startsIn = async (start: string, end: string, zone: string, now: string) => {
+      const trip = h.seedTrip([[OWNER, 'owner']], { startDate: start, endDate: end });
+      const journey = await h.moduleRef.get(AchievementsService).journey({ id: OWNER } as never, trip.id, 'en', zone, ctx, at(now));
+      return journey.startsInDays;
+    };
+
+    it('counts whole days from today in the request zone: 12, tomorrow, 0 on the start day, negative once started', async () => {
+      expect(await startsIn('2026-06-13', '2026-06-20', 'UTC', '2026-06-01T10:00:00Z')).toBe(12);
+      expect(await startsIn('2026-06-02', '2026-06-20', 'UTC', '2026-06-01T10:00:00Z')).toBe(1);
+      expect(await startsIn('2026-06-01', '2026-06-20', 'UTC', '2026-06-01T23:59:00Z')).toBe(0);
+      expect(await startsIn('2026-06-01', '2026-06-20', 'UTC', '2026-06-04T01:00:00Z')).toBe(-3);
+    });
+
+    it('is null after the trip ends, and still set on its last day', async () => {
+      expect(await startsIn('2026-06-01', '2026-06-03', 'UTC', '2026-06-03T12:00:00Z')).toBe(-2);
+      expect(await startsIn('2026-06-01', '2026-06-03', 'UTC', '2026-06-04T00:00:00Z')).toBeNull();
+    });
+
+    it('follows the request time zone, not UTC', async () => {
+      // 2026-06-01T20:00Z is already June 2 in Auckland and still June 1 in Los Angeles.
+      expect(await startsIn('2026-06-05', '2026-06-09', 'Pacific/Auckland', '2026-06-01T20:00:00Z')).toBe(3);
+      expect(await startsIn('2026-06-05', '2026-06-09', 'America/Los_Angeles', '2026-06-01T20:00:00Z')).toBe(4);
+      expect(await startsIn('2026-06-02', '2026-06-09', 'Pacific/Auckland', '2026-06-01T20:00:00Z')).toBe(0);
+      expect(await startsIn('2026-06-01', '2026-06-09', 'Pacific/Auckland', '2026-06-01T20:00:00Z')).toBe(-1);
+    });
+
+    it('is not thrown off by daylight saving changes', async () => {
+      // Madrid springs forward on 2026-03-29 (23-hour day); New York on 2026-03-08; Madrid falls back on 2026-10-25.
+      expect(await startsIn('2026-04-01', '2026-04-05', 'Europe/Madrid', '2026-03-28T23:30:00Z')).toBe(3);
+      expect(await startsIn('2026-03-10', '2026-03-12', 'America/New_York', '2026-03-08T06:30:00Z')).toBe(2);
+      expect(await startsIn('2026-10-27', '2026-10-30', 'Europe/Madrid', '2026-10-24T22:30:00Z')).toBe(2);
+      expect(await startsIn('2026-03-30', '2026-04-02', 'Europe/Madrid', '2026-03-28T22:30:00Z')).toBe(2);
+    });
+
+    it('is returned by the endpoint, in the X-Timezone zone', async () => {
+      const trip = h.seedTrip([[OWNER, 'owner']], { startDate: isoDay(5), endDate: isoDay(6) });
+      const body = (await h.json<Journey>('GET', `/trips/${trip.id}/journey`, OWNER, undefined, { 'x-timezone': 'UTC' })).body;
+      expect(body.startsInDays).toBe(5);
+    });
+  });
+
   describe('GET /trips/:id/journey', () => {
     const view = (nodes: JourneyNode[]) => nodes.map((n) => `${n.key}:${n.status}`);
 
@@ -290,13 +380,14 @@ describe('Achievements and the Journey (feature)', () => {
         { kind: 'milestone', key: 'first_place', title: 'First place added', status: 'current', skippable: false, thumbs: undefined },
         { kind: 'milestone', key: 'all_days_planned', title: 'Every day planned', status: 'todo', skippable: true, thumbs: undefined },
         { kind: 'milestone', key: 'first_member_joined', title: 'First person joined', status: 'done', skippable: true, thumbs: undefined },
+        { kind: 'milestone', key: 'checklist_created', title: 'Create your checklist', status: 'todo', skippable: true, thumbs: undefined },
         { kind: 'day', key: 'day_completed:1', title: 'Day 1', day: 1, date: isoDay(-1), status: 'done', skippable: false, thumbs: 3 },
         { kind: 'day', key: 'day_completed:2', title: 'Day 2', day: 2, date: isoDay(0), status: 'todo', skippable: false, thumbs: 0 },
         { kind: 'day', key: 'day_completed:3', title: 'Day 3', day: 3, date: isoDay(1), status: 'locked', skippable: false, thumbs: 0 },
         { kind: 'milestone', key: 'trip_finished', title: 'Trip finished', status: 'locked', skippable: false, thumbs: undefined },
       ]);
-      expect(res.body.progress).toEqual({ resolved: 3, total: 8 });
-      expect(res.body.nodes[4].momentThumbs!.every((url) => url.startsWith('https://bucket.test/moments/'))).toBe(true);
+      expect(res.body.progress).toEqual({ resolved: 3, total: 9 });
+      expect(res.body.nodes[5].momentThumbs!.every((url) => url.startsWith('https://bucket.test/moments/'))).toBe(true);
       expect(res.body.achievements.map((a) => a.key).sort()).toEqual(['day_completed:1', 'first_member_joined', 'trip_created', 'trip_started']);
       expect(res.body.achievements.every((a) => a.tripId === trip.id)).toBe(true);
     });
@@ -312,6 +403,7 @@ describe('Achievements and the Journey (feature)', () => {
         'first_place:current',
         'all_days_planned:todo',
         'first_member_joined:todo',
+        'checklist_created:todo',
         'day_completed:1:done',
         'day_completed:2:locked',
         'day_completed:3:locked',
@@ -323,10 +415,11 @@ describe('Achievements and the Journey (feature)', () => {
       const trip = h.seedTrip([[OWNER, 'owner'], [EDITOR, 'editor']], { startDate: isoDay(3), endDate: isoDay(3) });
       await addPlace(trip.id, 1);
       await h.json('POST', `/trips/${trip.id}/journey/skips`, OWNER, { key: 'first_member_joined' });
+      await h.json('POST', `/trips/${trip.id}/journey/skips`, OWNER, { key: 'checklist_created' });
 
       const { body } = await h.json<Journey>('GET', `/trips/${trip.id}/journey`, OWNER);
 
-      expect(view(body.nodes)).toEqual(['trip_created:done', 'first_place:done', 'all_days_planned:done', 'first_member_joined:done', 'day_completed:1:locked', 'trip_finished:locked']);
+      expect(view(body.nodes)).toEqual(['trip_created:done', 'first_place:done', 'all_days_planned:done', 'first_member_joined:done', 'checklist_created:skipped', 'day_completed:1:locked', 'trip_finished:locked']);
       expect(body.nodes.filter((n) => n.status === 'current')).toHaveLength(0);
       const other = h.seedTrip([[OWNER, 'owner']], { startDate: isoDay(-3), endDate: isoDay(-2) });
       const open = (await h.json<Journey>('GET', `/trips/${other.id}/journey`, OWNER)).body.nodes;
@@ -336,9 +429,9 @@ describe('Achievements and the Journey (feature)', () => {
     });
 
     it.each([
-      ['pt-BR', ['Viagem criada', 'Primeiro lugar adicionado', 'Todos os dias planejados', 'Primeira pessoa entrou', 'Dia 1', 'Viagem concluída']],
-      ['es-MX', ['Viaje creado', 'Primer lugar agregado', 'Todos los días planeados', 'Se unió la primera persona', 'Día 1', 'Viaje terminado']],
-      ['fr', ['Trip created', 'First place added', 'Every day planned', 'First person joined', 'Day 1', 'Trip finished']],
+      ['pt-BR', ['Viagem criada', 'Primeiro lugar adicionado', 'Todos os dias planejados', 'Primeira pessoa entrou', 'Monte seu checklist', 'Dia 1', 'Viagem concluída']],
+      ['es-MX', ['Viaje creado', 'Primer lugar agregado', 'Todos los días planeados', 'Se unió la primera persona', 'Arma tu lista', 'Día 1', 'Viaje terminado']],
+      ['fr', ['Trip created', 'First place added', 'Every day planned', 'First person joined', 'Create your checklist', 'Day 1', 'Trip finished']],
     ])('localizes the titles for %s', async (language, titles) => {
       const trip = h.seedTrip([[OWNER, 'owner']], { startDate: isoDay(5), endDate: isoDay(5) });
 
@@ -380,7 +473,7 @@ describe('Achievements and the Journey (feature)', () => {
         skippedBy: { userId: EDITOR, displayName: 'Traveler 2222', avatarUrl: null, role: 'editor' },
       });
       // trip_created + first_member_joined done, all_days_planned skipped.
-      expect(res.body.journey.progress).toEqual({ resolved: 3, total: 6 });
+      expect(res.body.journey.progress).toEqual({ resolved: 3, total: 7 });
       const seen = (await h.json<Journey>('GET', `/trips/${trip.id}/journey`, VIEWER)).body;
       expect(node(seen, 'all_days_planned').status).toBe('skipped');
       expect(node(seen, 'first_place').status).toBe('current');
@@ -392,6 +485,9 @@ describe('Achievements and the Journey (feature)', () => {
 
       await skip(trip.id, OWNER, 'first_member_joined');
       await skip(trip.id, OWNER, 'all_days_planned');
+      await h.json('GET', '/me/achievements', OWNER);
+
+      await skip(trip.id, OWNER, 'checklist_created');
       await h.json('GET', '/me/achievements', OWNER);
 
       expect(keys(OWNER, trip.id)).toEqual(['trip_created']);
@@ -420,6 +516,15 @@ describe('Achievements and the Journey (feature)', () => {
       expect(node(undone.body.journey, 'first_member_joined').status).toBe('todo');
       expect((await unskip(trip.id, OWNER, 'first_member_joined')).status).toBe(200);
       expect(h.db.all(TripJourneySkip)).toHaveLength(0);
+    });
+
+    it('skips and unskips checklist_created like the other skippable steps (owner and editor only)', async () => {
+      const trip = h.seedTrip([[OWNER, 'owner'], [EDITOR, 'editor'], [VIEWER, 'viewer']], { startDate: isoDay(5), endDate: isoDay(5) });
+
+      expect((await skip(trip.id, VIEWER, 'checklist_created')).status).toBe(403);
+      const res = await skip(trip.id, EDITOR, 'checklist_created');
+      expect(node(res.body.journey, 'checklist_created')).toMatchObject({ status: 'skipped', skippable: true, skippedBy: { userId: EDITOR } });
+      expect(node((await unskip(trip.id, OWNER, 'checklist_created')).body.journey, 'checklist_created').status).toBe('todo');
     });
 
     it.each([
