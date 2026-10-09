@@ -140,6 +140,7 @@ export class InvitesService implements OnApplicationShutdown {
       expiresAt: new Date(invite.expiresAt).toISOString(),
     };
 
+    await this.activity?.emit({ type: 'invite.created', tripId, userId: user.id, inviteId: invite.id, email: invite.email });
     if (invite.email !== null) {
       const recipient = invite.email;
       this.inBackground(invite.id, [token, recipient], async (signal) => {
@@ -335,6 +336,8 @@ export class InvitesService implements OnApplicationShutdown {
   async accept(user: AuthUser, token: string, locale: Locale): Promise<AppTripDto> {
     const now = new Date();
     let tripId: string;
+    // The invite this call accepted (not an already-member no-op), for the inviter's notification.
+    let accepted: TripInvite | null = null;
     try {
       tripId = await this.invites.manager.transaction(async (manager) => {
         const found = await this.findUsable(token, manager.getRepository(TripInvite), now);
@@ -375,6 +378,7 @@ export class InvitesService implements OnApplicationShutdown {
         }
         await manager.insert(TripMember, { ...membership, role: invite.role });
         if (removal) await manager.delete(TripRemoval, membership);
+        accepted = invite;
         return invite.tripId;
       });
     } catch (error) {
@@ -383,6 +387,11 @@ export class InvitesService implements OnApplicationShutdown {
       tripId = (await this.findAny(token)).tripId;
     }
     await this.activity?.emit({ type: 'member.joined', tripId, userId: user.id });
+    // Assigned inside the transaction callback (TypeScript can't see that).
+    const acceptedInvite = accepted as TripInvite | null;
+    if (acceptedInvite) {
+      await this.activity?.emit({ type: 'invite.accepted', tripId, userId: user.id, inviterId: acceptedInvite.createdBy, emailInvite: acceptedInvite.email !== null });
+    }
     return this.appTrips.get(user, tripId, locale);
   }
 

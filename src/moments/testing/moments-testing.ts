@@ -16,6 +16,10 @@ import { MediaModule } from '../../media/media.module.js';
 import { AchievementsModule } from '../../achievements/achievements.module.js';
 import { UserAchievement } from '../../achievements/user-achievement.entity.js';
 import { TripJourneySkip } from '../../achievements/trip-journey-skip.entity.js';
+import { Notification, NotificationJob, PushTicket, PushToken } from '../../notifications/entities.js';
+import { NotificationsModule } from '../../notifications/notifications.module.js';
+import { ChecklistItem, ChecklistReminder } from '../../checklist/checklist.entities.js';
+import { ChecklistModule } from '../../checklist/checklist.module.js';
 import { Moment } from '../moment.entity.js';
 import { MomentsModule } from '../moments.module.js';
 import { OBJECT_STORAGE } from '../storage/object-storage.js';
@@ -42,6 +46,38 @@ export function momentsDb(): InMemoryDb {
       primary: ['tripId', 'key'],
       generate: () => ({ skippedAt: new Date() }),
       relations: { trip: { entity: Trip, column: 'tripId' }, skipper: { entity: User, column: 'skippedBy', onDelete: 'SET NULL' } },
+    })
+    .define(PushToken, {
+      primary: ['token'],
+      generate: () => ({ lastSeenAt: new Date(), deviceId: null }),
+      relations: { user: { entity: User, column: 'userId' } },
+    })
+    .define(Notification, {
+      primary: ['id'],
+      generate: () => ({ id: randomUUID(), createdAt: new Date(), readAt: null, tripId: null }),
+      relations: { user: { entity: User, column: 'userId' }, trip: { entity: Trip, column: 'tripId', onDelete: 'SET NULL' } },
+    })
+    .define(NotificationJob, {
+      primary: ['id'],
+      // Like UQ_notification_jobs_key (NULL trip ids equal).
+      unique: [['userId', 'type', 'tripId', 'itemId', 'dueAt']],
+      generate: () => ({ id: randomUUID(), createdAt: new Date(), status: 'pending', payload: null, sentAt: null, itemId: '' }),
+      relations: { user: { entity: User, column: 'userId' }, trip: { entity: Trip, column: 'tripId' } },
+    })
+    .define(PushTicket, {
+      primary: ['id'],
+      generate: () => ({ createdAt: new Date() }),
+    })
+    .define(ChecklistItem, {
+      primary: ['id'],
+      generate: () => ({ id: randomUUID(), createdAt: new Date(), updatedAt: new Date(), done: false, doneBy: null, doneAt: null, notes: null, position: 0, source: 'user', createdBy: null }),
+      updateDate: 'updatedAt',
+      relations: { trip: { entity: Trip, column: 'tripId' } },
+    })
+    .define(ChecklistReminder, {
+      primary: ['itemId', 'userId'],
+      generate: () => ({ sentAt: null }),
+      relations: { item: { entity: ChecklistItem, column: 'itemId' }, user: { entity: User, column: 'userId' } },
     });
 }
 
@@ -99,11 +135,11 @@ export class MemoryObjectStorage implements ObjectStorage {
 
 /** Every Moments feature (AI, members, media, moments, achievements) over `db`, mock Places, and `storage` if given. */
 export function momentsTestingModule(db: InMemoryDb, config: Record<string, string> = {}, storage?: ObjectStorage): TestingModuleBuilder {
-  let builder = appTestingModule(db, [AiModule, MembersModule, MediaModule, MomentsModule, AchievementsModule], {
+  let builder = appTestingModule(db, [AiModule, MembersModule, MediaModule, MomentsModule, AchievementsModule, NotificationsModule, ChecklistModule], {
     FREE_AI_MESSAGES_PER_DAY: '1000',
     ...config,
   });
-  for (const entity of [AiConversation, AiMessage, TripPlace, Moment, UserAchievement, TripJourneySkip]) {
+  for (const entity of [AiConversation, AiMessage, TripPlace, Moment, UserAchievement, TripJourneySkip, PushToken, Notification, NotificationJob, PushTicket, ChecklistItem, ChecklistReminder]) {
     builder = builder.overrideProvider(getRepositoryToken(entity)).useValue(db.repository(entity as never));
   }
   if (storage) builder = builder.overrideProvider(OBJECT_STORAGE).useValue(storage);

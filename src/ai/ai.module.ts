@@ -73,7 +73,7 @@ export function createPlacesProvider(config: AiConfig): PlacesDirectory {
     ItineraryService,
     AiService,
   ],
-  exports: [AiService, AI_CONFIG, PLACES_PROVIDER, ItineraryService],
+  exports: [AiService, AI_CONFIG, PLACES_PROVIDER, LLM_PROVIDER, ItineraryService],
 })
 export class AiModule implements OnModuleInit {
   private readonly logger = new Logger(AiModule.name);

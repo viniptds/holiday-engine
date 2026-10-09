@@ -81,6 +81,28 @@ export function localDayBounds(zone: string, now: Date = new Date()): { start: D
   };
 }
 
+const wallClocks = new Map<string, Intl.DateTimeFormat>();
+
+/** The instant when the wall clock in `zone` reads `hour`:00 on `isoDate` (YYYY-MM-DD). DST-safe: a skipped hour gives the next valid instant. */
+export function zonedInstant(zone: string, isoDate: string, hour: number): Date {
+  let format = wallClocks.get(zone);
+  if (!format) {
+    format = new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+    if (wallClocks.size > 500) wallClocks.clear();
+    wallClocks.set(zone, format);
+  }
+  const [y, m, d] = isoDate.split('-').map(Number);
+  const target = Date.UTC(y, m - 1, d, hour);
+  /** The zone's offset (local wall time minus UTC) at `instant`, in ms. */
+  const offset = (instant: number) => {
+    const parts = Object.fromEntries(format!.formatToParts(new Date(instant)).map((p) => [p.type, p.value]));
+    return Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second) - instant;
+  };
+  let instant = target - offset(target);
+  instant = target - offset(instant);
+  return new Date(instant);
+}
+
 type RequestWithZone = { headers: Record<string, string | string[] | undefined>; user?: AuthUser };
 
 /** The zone for a request: a valid `X-Timezone`, else the user's stored zone, else UTC. */

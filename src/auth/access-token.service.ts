@@ -40,6 +40,6 @@ export class AccessTokenService {
 
     const user = await this.users.findActive(sub);
     if (!user) throw invalidAccessToken();
-    return { id: user.id, email: user.email, devAccount: isDevLoginAccount(user.googleSub), timezone: user.timezone ?? null };
+    return { id: user.id, email: user.email, devAccount: isDevLoginAccount(user.googleSub), timezone: user.timezone ?? null, locale: user.locale ?? null };
   }
 }

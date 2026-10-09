@@ -12,6 +12,8 @@ export interface AuthUser {
   devAccount?: boolean;
   /** The IANA zone stored for the user (`users.timezone`), if any. */
   timezone?: string | null;
+  /** The language stored for the user (`users.locale`), if any. */
+  locale?: string | null;
 }
 
 /** Public profile of a user, as other features need it (member lists, invites). */

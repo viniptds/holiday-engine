@@ -15,6 +15,8 @@ import { BillingEvent } from '../billing/billing-event.entity.js';
 import { Moment } from '../moments/moment.entity.js';
 import { UserAchievement } from '../achievements/user-achievement.entity.js';
 import { TripJourneySkip } from '../achievements/trip-journey-skip.entity.js';
+import { Notification, NotificationJob, PushTicket, PushToken } from '../notifications/entities.js';
+import { ChecklistItem, ChecklistReminder } from '../checklist/checklist.entities.js';
 import { migrations } from './migrations/index.js';
 
 const isTrue = (value: string | undefined): boolean => value?.toLowerCase() === 'true';
@@ -31,7 +33,7 @@ export function databaseConfig(config: ConfigService): TypeOrmModuleOptions {
     database: config.get<string>('PGDATABASE'),
     ssl: isTrue(config.get<string>('PGSSL')) ? { rejectUnauthorized: false } : false,
     uuidExtension: 'pgcrypto',
-    entities: [Trip, SuggestedEvent, User, RefreshToken, TripMember, TripInvite, TripRemoval, AiConversation, AiMessage, TripPlace, UserEntitlement, BillingEvent, Moment, UserAchievement, TripJourneySkip],
+    entities: [Trip, SuggestedEvent, User, RefreshToken, TripMember, TripInvite, TripRemoval, AiConversation, AiMessage, TripPlace, UserEntitlement, BillingEvent, Moment, UserAchievement, TripJourneySkip, PushToken, Notification, NotificationJob, PushTicket, ChecklistItem, ChecklistReminder],
     migrations,
     migrationsRun: true,
     synchronize: isTrue(config.get<string>('DB_SYNCHRONIZE')),
