@@ -9,7 +9,8 @@
     "start:prod": "node dist/main",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "repo-map": "node scripts/repo-map.mjs"
   },
   "type": "module",
   "author": "",
