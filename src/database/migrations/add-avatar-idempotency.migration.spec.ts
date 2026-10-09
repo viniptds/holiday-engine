@@ -11,9 +11,10 @@ async function run(direction: 'up' | 'down'): Promise<string[]> {
 }
 
 describe('AddAvatarIdempotency1761100000000', () => {
-  it('runs last, after the notifications', () => {
-    expect(migrations.at(-1)).toBe(AddAvatarIdempotency1761100000000);
-    expect(migrations.at(-2)?.name).toBe('AddNotificationsChecklist1761000000000');
+  it('runs after the notifications', () => {
+    const index = migrations.indexOf(AddAvatarIdempotency1761100000000);
+    expect(index).toBeGreaterThan(0);
+    expect(migrations[index - 1]?.name).toBe('AddNotificationsChecklist1761000000000');
   });
 
   it('adds the avatar fields (existing users keep Google, backfilled) and the tables', async () => {

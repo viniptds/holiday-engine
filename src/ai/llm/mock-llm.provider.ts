@@ -4,6 +4,7 @@ import { REPLY_LANGUAGE_PREFIX } from '../prompt.js';
 import type { ModelDraft } from '../draft.js';
 import type { DraftTurnInput, DraftTurnResult, LlmProvider } from './llm-provider.js';
 import { CHECKLIST_SUGGESTIONS_SCHEMA } from '../checklist-schema.js';
+import { HOME_COPY_DESTINATION_PREFIX, HOME_COPY_SCHEMA } from '../../home/home-copy-schema.js';
 
 const TEXT: Record<Locale, { where: string; when: string; ready: (d: string) => string; more: string }> = {
   en: {
@@ -75,6 +76,19 @@ const RELAXED = /\b(relaxed|slow|calm|tranquil[oa]?|relajad[oa]|devagar|sem pres
 
 const PEOPLE = /\b(\d{1,2})\s*(?:people|persons|travell?ers|adults|pessoas|personas)\b/i;
 
+/** Deterministic banner copy for the nightly refresh: three pairs naming the destination, within the copy rules. */
+function mockHomeCopy(input: DraftTurnInput): { variants: { headline: string; subline: string }[] } {
+  const line = input.history.flatMap((e) => e.text.split('\n')).find((l) => l.startsWith(HOME_COPY_DESTINATION_PREFIX));
+  const name = line ? line.slice(HOME_COPY_DESTINATION_PREFIX.length).trim() : 'Somewhere';
+  return {
+    variants: [
+      { headline: `${name}, a fresh idea`, subline: `Mock copy one for ${name}, within the rules.` },
+      { headline: `${name}, worth a look`, subline: `Mock copy two for ${name}, within the rules.` },
+      { headline: `${name}, on your list`, subline: `Mock copy three for ${name}, within the rules.` },
+    ],
+  };
+}
+
 function localeOf(system: string): Locale {
   const line = system.split('\n').find((l) => l.startsWith(REPLY_LANGUAGE_PREFIX)) ?? '';
   const tag = line.slice(REPLY_LANGUAGE_PREFIX.length).split(' ')[0];
@@ -106,6 +120,7 @@ export class MockLlmProvider implements LlmProvider {
   async draftTurn(input: DraftTurnInput): Promise<DraftTurnResult> {
     const locale = localeOf(input.system);
     if (input.schema === CHECKLIST_SUGGESTIONS_SCHEMA) return { json: { items: MOCK_CHECKLIST[locale] }, model: 'mock', inputTokens: 10, outputTokens: 10 };
+    if (input.schema === HOME_COPY_SCHEMA) return { json: mockHomeCopy(input), model: 'mock', inputTokens: 10, outputTokens: 10 };
     const text = TEXT[locale];
     const last = [...input.history].reverse().find((e) => e.role === 'user')?.text ?? '';
     const before = previousDraft(input);

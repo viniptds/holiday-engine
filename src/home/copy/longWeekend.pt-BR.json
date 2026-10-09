@@ -1,0 +1,44 @@
+{
+  "templates": [
+    {
+      "headline": "{holidayName}: {daysOff} dias de folga",
+      "subline": "{destination} fica a {distanceKm} km, o bastante para mudar de ares.",
+      "plannerPrompt": "Quero planejar uma viagem de {daysOff} dias para {destination} no feriado de {holidayName}."
+    },
+    {
+      "headline": "{destination} no feriado de {holidayName}",
+      "subline": "{daysOff} dias de folga e {distanceKm} km, voo curto ou estrada longa.",
+      "plannerPrompt": "Quero planejar {daysOff} dias de viagem para {destination} no feriado de {holidayName}."
+    },
+    {
+      "headline": "{destination}, um feriado prolongado",
+      "subline": "{holidayName} rende {daysOff} dias, e {destination} fica a {distanceKm} km.",
+      "plannerPrompt": "Quero planejar um feriado prolongado de {daysOff} dias para {destination}."
+    },
+    {
+      "headline": "{destination}, {daysOff} dias em {month}",
+      "subline": "O feriado de {holidayName}, a {distanceKm} km de casa, com {persona}.",
+      "plannerPrompt": "Quero planejar {daysOff} dias para {destination} no feriado de {holidayName}, em {month}."
+    },
+    {
+      "headline": "{destination}: estique o feriado",
+      "subline": "{daysOff} dias de folga, {distanceKm} km, e você volta a tempo do trabalho.",
+      "plannerPrompt": "Quero planejar uma viagem de {daysOff} dias para {destination} num fim de semana prolongado."
+    },
+    {
+      "headline": "{destination} num fim de semana prolongado",
+      "subline": "Tire a sexta: {daysOff} dias, {distanceKm} km e {destination} em {month}.",
+      "plannerPrompt": "Quero planejar uma viagem de {daysOff} dias para {destination} em {month}, tirando a sexta."
+    },
+    {
+      "headline": "{destination} por {daysOff} dias",
+      "subline": "A {distanceKm} km de você e {daysOff} dias para aproveitar em {month}.",
+      "plannerPrompt": "Quero planejar {daysOff} dias para {destination} em {month}."
+    },
+    {
+      "headline": "Feriado de {holidayName}: {destination}",
+      "subline": "{daysOff} dias, {distanceKm} km e tempo para {persona}.",
+      "plannerPrompt": "Quero planejar o feriado de {holidayName} para {destination}, {daysOff} dias."
+    }
+  ]
+}

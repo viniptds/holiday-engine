@@ -16,8 +16,8 @@ import { Trip } from '../trips/trip.entity.js';
 import { daysBetween } from '../trips/dto/date-rules.js';
 import { AI_CONFIG } from './ai.config.js';
 import type { AiConfig } from './ai.config.js';
-import { MAX_LISTED_CONVERSATIONS, MAX_USER_MESSAGES_PER_CONVERSATION, RATE_LIMITS } from './ai.types.js';
-import type { AiConversationDto, AiTurnDto, DraftPlace, TripAiConversationDto, TripDraft } from './ai.types.js';
+import { LAST_MESSAGE_PREVIEW_LENGTH, MAX_LISTED_CONVERSATIONS, MAX_USER_MESSAGES_PER_CONVERSATION, RATE_LIMITS } from './ai.types.js';
+import type { AiConversationDto, AiConversationSummary, AiTurnDto, ConversationStatus, DraftPlace, TripAiConversationDto, TripDraft } from './ai.types.js';
 import { toConversationDto, toTurnDto } from './ai.mapper.js';
 import { MODEL_DRAFT_SCHEMA, normalizeDraft, parseModelDraft, replayText } from './draft.js';
 import type { ModelDraft } from './draft.js';
@@ -239,14 +239,22 @@ export class AiService {
     return this.answer(conversation, locale, history);
   }
 
-  /** The user's conversations, most recently active first. */
-  async list(user: AuthUser): Promise<AiConversationDto[]> {
+  /** The user's conversations (optionally by status), most recently active first, each with its draft summary. */
+  async list(user: AuthUser, status?: ConversationStatus): Promise<AiConversationSummary[]> {
     const rows = await this.conversations.find({
-      where: { userId: user.id },
+      where: status ? { userId: user.id, status } : { userId: user.id },
       order: { updatedAt: 'DESC', createdAt: 'DESC' },
       take: MAX_LISTED_CONVERSATIONS,
     });
-    return rows.map(toConversationDto);
+    if (rows.length === 0) return [];
+    const messages = await this.messages.find({ where: { conversationId: In(rows.map((c) => c.id)) }, order: { createdAt: 'ASC' } });
+    const byConversation = new Map<string, AiMessage[]>();
+    for (const message of messages) {
+      const list = byConversation.get(message.conversationId) ?? [];
+      list.push(message);
+      byConversation.set(message.conversationId, list);
+    }
+    return rows.map((c) => summarize(c, byConversation.get(c.id) ?? []));
   }
 
   /**
@@ -545,6 +553,20 @@ export class AiService {
 }
 
 /** Stored turns as model history: assistant turns as their JSON, consecutive user turns merged. */
+/** The conversation with what its draft card shows: the latest draft's essentials, the latest user message, counts. */
+export function summarize(conversation: AiConversation, messages: AiMessage[]): AiConversationSummary {
+  const latestDraft = [...messages].reverse().find((m) => m.role === 'assistant' && m.draft)?.draft ?? null;
+  const latestUser = [...messages].reverse().find((m) => m.role === 'user');
+  const last = messages[messages.length - 1];
+  return {
+    ...toConversationDto(conversation),
+    draftSummary: latestDraft ? { destination: latestDraft.destination, startDate: latestDraft.startDate, endDate: latestDraft.endDate, ready: latestDraft.ready } : null,
+    lastMessagePreview: latestUser ? latestUser.text.replace(/\s+/g, ' ').trim().slice(0, LAST_MESSAGE_PREVIEW_LENGTH) : null,
+    lastMessageAt: last ? new Date(last.createdAt).toISOString() : null,
+    messageCount: messages.length,
+  };
+}
+
 export function toLlmHistory(messages: AiMessage[]): LlmHistoryEntry[] {
   const entries: LlmHistoryEntry[] = [];
   for (const message of messages) {

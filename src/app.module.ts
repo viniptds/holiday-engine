@@ -21,6 +21,7 @@ import { MomentsModule } from './moments/moments.module.js';
 import { AchievementsModule } from './achievements/achievements.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { ChecklistModule } from './checklist/checklist.module.js';
+import { HomeModule } from './home/home.module.js';
 import { databaseConfig } from './database/database.config.js';
 
 @Module({
@@ -59,6 +60,7 @@ import { databaseConfig } from './database/database.config.js';
     AchievementsModule,
     NotificationsModule,
     ChecklistModule,
+    HomeModule,
   ],
   controllers: [AppController],
 })

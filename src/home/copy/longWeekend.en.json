@@ -1,0 +1,44 @@
+{
+  "templates": [
+    {
+      "headline": "{daysOff} days off for {holidayName}",
+      "subline": "{destination} is {distanceKm} km away, enough for a real change of air.",
+      "plannerPrompt": "Plan a {daysOff}-day trip to {destination} for the {holidayName} long weekend."
+    },
+    {
+      "headline": "{destination} for {holidayName}",
+      "subline": "{daysOff} days off and {distanceKm} km, a short flight or a long drive.",
+      "plannerPrompt": "Plan {daysOff} days in {destination} for {holidayName}."
+    },
+    {
+      "headline": "A long weekend in {destination}",
+      "subline": "{holidayName} gives you {daysOff} days, and {destination} is {distanceKm} km away.",
+      "plannerPrompt": "Plan a {daysOff}-day long weekend in {destination}."
+    },
+    {
+      "headline": "{destination}, {daysOff} days in {month}",
+      "subline": "The {holidayName} weekend, {distanceKm} km from home and your kind of {persona}.",
+      "plannerPrompt": "Plan {daysOff} days in {destination} for {holidayName}, in {month}."
+    },
+    {
+      "headline": "Stretch the holiday in {destination}",
+      "subline": "{daysOff} days off, {distanceKm} km away, and back on time for work.",
+      "plannerPrompt": "Plan a {daysOff}-day trip to {destination} on a long weekend."
+    },
+    {
+      "headline": "{destination} on a long weekend",
+      "subline": "Take Friday off: {daysOff} days, {distanceKm} km, and {destination} in {month}.",
+      "plannerPrompt": "Plan a {daysOff}-day trip to {destination} in {month}, taking Friday off."
+    },
+    {
+      "headline": "{daysOff} days in {destination}",
+      "subline": "{distanceKm} km from you and {daysOff} days to spend there in {month}.",
+      "plannerPrompt": "Plan {daysOff} days in {destination} in {month}."
+    },
+    {
+      "headline": "{holidayName} weekend in {destination}",
+      "subline": "{daysOff} days, {distanceKm} km, and time for {persona}.",
+      "plannerPrompt": "Plan the {holidayName} long weekend in {destination}, {daysOff} days."
+    }
+  ]
+}

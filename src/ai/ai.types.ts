@@ -76,6 +76,20 @@ export type AiConversationDto = {
   updatedAt: string;
 };
 
+/** What a draft card shows (docs/app-home-spec.md, Resumable drafts): the latest assistant draft's essentials. */
+export type DraftSummary = { destination: string | null; startDate: string | null; endDate: string | null; ready: boolean };
+
+/** A listed conversation with its latest state: `GET /ai/conversations` and the Home draft row. */
+export type AiConversationSummary = AiConversationDto & {
+  draftSummary: DraftSummary | null;
+  /** The first 80 characters of the latest user message. */
+  lastMessagePreview: string | null;
+  lastMessageAt: string | null;
+  messageCount: number;
+};
+
+export const LAST_MESSAGE_PREVIEW_LENGTH = 80;
+
 /** A trip's linked conversation in `GET /trips/:id/ai/conversations`. `role` is null for an author who left the trip. */
 export type TripAiConversationDto = AiConversationDto & {
   author: { userId: string; displayName: string; avatarUrl: string | null; role: TripRole | null };

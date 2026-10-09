@@ -1,7 +1,8 @@
-import { ArrayMaxSize, IsArray, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { NoControlChars } from '../../trips/dto/no-control-chars.validator.js';
 import { Trim } from '../../trips/dto/trim.transform.js';
-import { MAX_MESSAGE_LENGTH } from '../ai.types.js';
+import { CONVERSATION_STATUSES, MAX_MESSAGE_LENGTH } from '../ai.types.js';
+import type { ConversationStatus } from '../ai.types.js';
 
 /** `POST /ai/conversations/:id/messages` body. Decorators run bottom-up: the type check is last. */
 export class PostAiMessageDto {
@@ -32,4 +33,11 @@ export class ConfirmAiConversationDto {
   @ArrayMaxSize(50)
   @IsArray()
   placeIds?: string[];
+}
+
+/** `GET /ai/conversations?status=` (open, confirmed or abandoned; all when omitted). */
+export class ListConversationsQueryDto {
+  @IsOptional()
+  @IsIn(CONVERSATION_STATUSES)
+  status?: ConversationStatus;
 }

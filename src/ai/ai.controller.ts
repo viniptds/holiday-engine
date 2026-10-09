@@ -11,10 +11,10 @@ import { AuthGuard } from '../auth/auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import type { AppTripDto } from '../app-trips/app-trips.types.js';
 import { AiService, FirstTurnUnavailableError } from './ai.service.js';
-import type { AiConversationDto, AiTurnDto, ItineraryDto, PlaceSearchResultDto, TripAiConversationDto, TripPlaceDto } from './ai.types.js';
+import type { AiConversationDto, AiConversationSummary, AiTurnDto, ItineraryDto, PlaceSearchResultDto, TripAiConversationDto, TripPlaceDto } from './ai.types.js';
 import { ItineraryService } from './itinerary.service.js';
 import { AddPlaceDto, PatchPlaceDto, PutItineraryDto, SearchPlacesQueryDto } from './dto/places.dto.js';
-import { ConfirmAiConversationDto, PostAiMessageDto, StartAiConversationDto } from './dto/ai-message.dto.js';
+import { ConfirmAiConversationDto, ListConversationsQueryDto, PostAiMessageDto, StartAiConversationDto } from './dto/ai-message.dto.js';
 
 // Minimal shape of the Express response (no @types/express in this project).
 type StatusResponse = { status(code: number): unknown };
@@ -49,8 +49,8 @@ export class AiConversationsController {
   }
 
   @Get()
-  async list(@CurrentUser() user: AuthUser): Promise<{ conversations: AiConversationDto[] }> {
-    return { conversations: await this.ai.list(user) };
+  async list(@CurrentUser() user: AuthUser, @Query(appValidationPipe) query: ListConversationsQueryDto): Promise<{ conversations: AiConversationSummary[] }> {
+    return { conversations: await this.ai.list(user, query.status) };
   }
 
   @Get(':id')
