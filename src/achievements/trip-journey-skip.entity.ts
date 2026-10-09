@@ -11,7 +11,8 @@ export class TripJourneySkip {
   @PrimaryColumn('uuid', { primaryKeyConstraintName: 'PK_trip_journey_skips' })
   tripId: string;
 
-  @PrimaryColumn('text')
+  // Both primary columns name the same constraint (TypeORM refuses differing names at startup).
+  @PrimaryColumn('text', { primaryKeyConstraintName: 'PK_trip_journey_skips' })
   key: string;
 
   @ManyToOne(() => Trip, { onDelete: 'CASCADE' })

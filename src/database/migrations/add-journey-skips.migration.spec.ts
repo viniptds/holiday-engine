@@ -27,5 +27,9 @@ describe('AddJourneySkips1760800000000', () => {
     expect(storage.relations.find((r) => r.target === TripJourneySkip && r.propertyName === 'trip')?.options.onDelete).toBe('CASCADE');
     expect(storage.relations.find((r) => r.target === TripJourneySkip && r.propertyName === 'skipper')?.options.onDelete).toBe('SET NULL');
     expect(await run('down')).toEqual(['DROP TABLE "trip_journey_skips"']);
+    // TypeORM fails startup if a composite primary key's columns name different constraints.
+    const primaries = storage.columns.filter((c) => c.target === TripJourneySkip && c.mode === 'regular' && (c.options as { primary?: boolean }).primary);
+    expect(primaries.map((c) => c.propertyName).sort()).toEqual(['key', 'tripId']);
+    expect(new Set(primaries.map((c) => (c.options as { primaryKeyConstraintName?: string }).primaryKeyConstraintName))).toEqual(new Set(['PK_trip_journey_skips']));
   });
 });
