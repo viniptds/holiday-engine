@@ -10,8 +10,8 @@ Nest bootstrap (main.ts), AppModule wiring, health controller, HTTP server timeo
 - Controller AppController `app.controller.ts`
   - GET / → health
 - Module AppModule `app.module.ts`
-- fns: applyHttpServerTimeouts, httpServerTimeouts
-- types: HttpServerTimeouts
+- fns: applyHttpServerTimeouts, applyTrustProxy, httpServerTimeouts, trustProxySetting
+- types: HttpServerTimeouts, TrustProxySetting
 - consts: DEFAULT_KEEP_ALIVE_TIMEOUT_MS, HEADERS_TIMEOUT_MARGIN_MS
 
 ## src/achievements/
@@ -519,5 +519,6 @@ Found via `config.get(...)`, `process.env.X`, env key lists and similar readers.
 - STORAGE_DRIVER · moments/moments.module.ts, moments/storage/storage.config.ts
 - STORAGE_LOCAL_DIR · moments/moments.module.ts, moments/storage/storage.config.ts
 - SUGGESTIONS_CRON · suggestions/suggestions.scheduler.ts
+- TRUST_PROXY · main.ts
 - WEB_ORIGINS · leads/leads.module.ts
 - WIZARD_QUESTIONS_PATH · wizard/wizard.module.ts
