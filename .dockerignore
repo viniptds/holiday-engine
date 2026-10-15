@@ -1,0 +1,15 @@
+node_modules
+dist
+coverage
+.env
+.env.*
+storage/
+.git
+.gitignore
+.test-lock/
+*.tsbuildinfo
+docker-compose*.yml
+Dockerfile
+deploy/
+docs/
+backups/

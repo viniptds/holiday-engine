@@ -1,0 +1,106 @@
+# Production stack: postgres + redis + engine + cloudflared, one replica, no published ports.
+# Run through the scripts in deploy/, or:
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+name: holidai
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgres:16.14-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PGUSER:?set PGUSER in .env.production}
+      POSTGRES_PASSWORD: ${PGPASSWORD:?set PGPASSWORD in .env.production}
+      POSTGRES_DB: ${PGDATABASE:?set PGDATABASE in .env.production}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [backend]
+    logging: *logging
+
+  redis:
+    image: redis:8.10.2-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [backend]
+    logging: *logging
+
+  engine:
+    build: .
+    image: holidai-engine:${ENGINE_TAG:-latest}
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGSSL: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      # Must stay above cloudflared's 90 s idle keep-alive, or clients get sporadic 502s.
+      HTTP_KEEP_ALIVE_TIMEOUT_MS: "120000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    networks: [backend, edge]
+    logging: *logging
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.10.0
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      engine:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [edge]
+    logging: *logging
+
+  # One-off helper (never started by `up`): uploads a backup to R2. Only BACKUP_S3_* variables, no engine secrets.
+  # Run by deploy/backup.sh with `docker compose run --rm --no-deps backup-upload`.
+  backup-upload:
+    image: holidai-engine:${ENGINE_TAG:-latest}
+    profiles: [tools]
+    entrypoint: ["node", "/app/upload-backup.mjs"]
+    working_dir: /app
+    environment:
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      BACKUP_S3_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY_ID:-}
+      BACKUP_S3_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY:-}
+    volumes:
+      - ./deploy/upload-backup.mjs:/app/upload-backup.mjs:ro
+    networks: [edge]
+    logging: *logging
+
+networks:
+  backend:
+    internal: true
+  edge: {}
+
+volumes:
+  pgdata:
+  redisdata:
