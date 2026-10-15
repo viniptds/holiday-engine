@@ -221,6 +221,22 @@ Idempotency-Key interceptor and stored keys for offline-safe writes.
 - Module IdempotencyModule `idempotency.module.ts`
 - consts: IDEMPOTENCY_HEADER, IDEMPOTENCY_TTL_MS
 
+## src/leads/
+
+- Entity Lead `lead.entity.ts` · table `leads`
+- Service LeadsTokenService `leads-token.service.ts`
+- Controller LeadsController `leads.controller.ts`
+  - GET /public/v1/leads/token → token
+  - POST /public/v1/leads → create
+- Module LeadsModule `leads.module.ts`
+- Service LeadsService `leads.service.ts`
+- Injectable PublicCorsMiddleware `public-cors.middleware.ts`
+- Dtos (2): CreateLeadDto, LeadUtmDto · in leads.dto.ts
+- fns: allowedOrigin, normalizeOrigin, readLeadsConfig
+- types: LeadKind, LeadLang, LeadResult, LeadStatus, LeadUtm, LeadsConfig, RequestInfo
+- consts: HASH_SALT_MIN_LENGTH, LEADS_CONFIG, LEAD_KINDS, LEAD_LANGS, LEAD_STATUSES, MAX_REDEEMED_NONCES, MESSAGE_MAX, NAME_MAX, PUBLIC_PREFIX, TOKEN_SECRET_MIN_LENGTH, TOKEN_TTL_SECONDS
+- test helpers: LEADS_ENV, WEB_ORIGIN, leadsDb, leadsTestingModule
+
 ## src/mail/
 Transactional email: transport drivers, templates, config, redaction.
 
@@ -386,6 +402,7 @@ Bot-side Trip entity, DTOs and trip service.
 User entity, UsersService/directory, deletion hooks, /me extensions, timezone interceptor.
 
 - Injectable AvatarUrls `avatar-urls.ts`
+- Hooks GoogleSignInHooks `google-sign-in-hooks.ts`
 - Injectable MeExtensions `me-extensions.ts`
 - Interceptor TimezoneInterceptor `timezone.interceptor.ts`
 - Hooks UserDeletionHooks `user-deletion-hooks.ts`
@@ -394,7 +411,7 @@ User entity, UsersService/directory, deletion hooks, /me extensions, timezone in
 - Service UsersService `users.service.ts`
 - Dtos (1): UpdateProfileDto · in dto/update-profile.dto.ts
 - fns: toUserDto
-- types: AvatarSource, AvatarUrlSigner, GoogleIdentity, MeContext, MeExtension, UserDeletionHook, UserDto
+- types: AvatarSource, AvatarUrlSigner, GoogleIdentity, GoogleSignInHook, MeContext, MeExtension, UserDeletionHook, UserDto
 
 ## src/wizard/
 Trip-creation wizard: question set loader, persona, localization.
@@ -430,6 +447,7 @@ Registered in `src/database/migrations/index.ts` (a new migration must be added 
 18. AddNotificationsChecklist1761000000000 · `1761000000000-add-notifications-checklist.ts`
 19. AddAvatarIdempotency1761100000000 · `1761100000000-add-avatar-idempotency.ts`
 20. AddHomeCopy1761200000000 · `1761200000000-add-home-copy.ts`
+21. CreateLeads1761300000000 · `1761300000000-create-leads.ts`
 
 ## Env variables read
 Found via `config.get(...)`, `process.env.X`, env key lists and similar readers. Name · files.
@@ -459,6 +477,8 @@ Found via `config.get(...)`, `process.env.X`, env key lists and similar readers.
 - HOME_WEATHER_CACHE_MINUTES · home/home.config.ts
 - HTTP_KEEP_ALIVE_TIMEOUT_MS · main.ts
 - JWT_SECRET · auth/auth.module.ts, moments/moments.module.ts, notifications/notifications.service.ts
+- LEADS_HASH_SALT · leads/leads.module.ts
+- LEADS_TOKEN_SECRET · leads/leads.module.ts
 - MAILJET_API_KEY · mail/drivers/mailjet.driver.ts
 - MAILJET_API_SECRET · mail/drivers/mailjet.driver.ts
 - MAIL_FROM · mail/mail.config.ts
@@ -499,4 +519,5 @@ Found via `config.get(...)`, `process.env.X`, env key lists and similar readers.
 - STORAGE_DRIVER · moments/moments.module.ts, moments/storage/storage.config.ts
 - STORAGE_LOCAL_DIR · moments/moments.module.ts, moments/storage/storage.config.ts
 - SUGGESTIONS_CRON · suggestions/suggestions.scheduler.ts
+- WEB_ORIGINS · leads/leads.module.ts
 - WIZARD_QUESTIONS_PATH · wizard/wizard.module.ts

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AppError } from '../app-common/app-error.js';
 import { UsersService } from '../users/users.service.js';
 import { UserDeletionHooks } from '../users/user-deletion-hooks.js';
+import { GoogleSignInHooks } from '../users/google-sign-in-hooks.js';
 import { toUserDto } from '../users/user.dto.js';
 import type { UserDto } from '../users/user.dto.js';
 import type { User } from '../users/user.entity.js';
@@ -20,11 +21,14 @@ export class AuthService {
     private readonly accessTokens: AccessTokenService,
     private readonly refreshTokens: RefreshTokenService,
     private readonly deletionHooks: UserDeletionHooks,
+    private readonly signInHooks: GoogleSignInHooks,
   ) {}
 
   async signInWithGoogle(idToken: string): Promise<AuthSession> {
     const identity = await this.google.verify(idToken);
     const user = await this.users.findOrCreateFromGoogle(identity);
+    // Best effort (e.g. converting a web lead): never blocks or fails the sign-in.
+    await this.signInHooks.run({ id: user.id, email: user.email });
     const { token } = await this.refreshTokens.issue(user.id);
     return this.session(user, token);
   }

@@ -18,6 +18,7 @@ import { AddMomentDays1760900000000 } from './1760900000000-add-moment-days.js';
 import { AddNotificationsChecklist1761000000000 } from './1761000000000-add-notifications-checklist.js';
 import { AddAvatarIdempotency1761100000000 } from './1761100000000-add-avatar-idempotency.js';
 import { AddHomeCopy1761200000000 } from './1761200000000-add-home-copy.js';
+import { CreateLeads1761300000000 } from './1761300000000-create-leads.js';
 
 // Register every migration here, in order.
 export const migrations = [
@@ -41,4 +42,5 @@ export const migrations = [
   AddNotificationsChecklist1761000000000,
   AddAvatarIdempotency1761100000000,
   AddHomeCopy1761200000000,
+  CreateLeads1761300000000,
 ];
