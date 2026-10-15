@@ -8,18 +8,20 @@ import { USER_DIRECTORY } from '../app-common/auth-user.js';
 import { User } from './user.entity.js';
 import { UsersService } from './users.service.js';
 import { UserDeletionHooks } from './user-deletion-hooks.js';
+import { GoogleSignInHooks } from './google-sign-in-hooks.js';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User])],
   providers: [
     UsersService,
     UserDeletionHooks,
+    GoogleSignInHooks,
     MeExtensions,
     AvatarUrls,
     { provide: USER_DIRECTORY, useExisting: UsersService },
     // Every authenticated request: keep users.timezone in step with X-Timezone.
     { provide: APP_INTERCEPTOR, useClass: TimezoneInterceptor },
   ],
-  exports: [UsersService, UserDeletionHooks, MeExtensions, AvatarUrls, USER_DIRECTORY],
+  exports: [UsersService, UserDeletionHooks, GoogleSignInHooks, MeExtensions, AvatarUrls, USER_DIRECTORY],
 })
 export class UsersModule {}

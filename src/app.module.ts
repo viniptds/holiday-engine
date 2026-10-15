@@ -22,6 +22,7 @@ import { AchievementsModule } from './achievements/achievements.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { ChecklistModule } from './checklist/checklist.module.js';
 import { HomeModule } from './home/home.module.js';
+import { LeadsModule } from './leads/leads.module.js';
 import { databaseConfig } from './database/database.config.js';
 
 @Module({
@@ -61,6 +62,7 @@ import { databaseConfig } from './database/database.config.js';
     NotificationsModule,
     ChecklistModule,
     HomeModule,
+    LeadsModule,
   ],
   controllers: [AppController],
 })

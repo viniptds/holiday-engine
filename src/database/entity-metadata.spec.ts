@@ -11,7 +11,7 @@ describe('entity metadata (what TypeORM validates at startup)', () => {
     // Builds and validates the metadata (e.g. composite primary keys naming one constraint); no connection.
     await (dataSource as unknown as { buildMetadatas(): Promise<void> }).buildMetadatas();
 
-    expect(dataSource.entityMetadatas.map((m) => m.tableName)).toEqual(expect.arrayContaining(['trip_journey_skips', 'moments', 'user_achievements']));
+    expect(dataSource.entityMetadatas.map((m) => m.tableName)).toEqual(expect.arrayContaining(['trip_journey_skips', 'moments', 'user_achievements', 'leads']));
     expect(dataSource.getMetadata('trip_journey_skips').primaryColumns.map((c) => c.propertyName).sort()).toEqual(['key', 'tripId']);
   });
 });

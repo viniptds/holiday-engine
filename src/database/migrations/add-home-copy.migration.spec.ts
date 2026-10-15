@@ -11,9 +11,9 @@ async function run(direction: 'up' | 'down'): Promise<string[]> {
 }
 
 describe('AddHomeCopy1761200000000', () => {
-  it('runs last, after the avatar and idempotency migration', () => {
-    expect(migrations.at(-1)).toBe(AddHomeCopy1761200000000);
-    expect(migrations.at(-2)?.name).toBe('AddAvatarIdempotency1761100000000');
+  it('runs after the avatar and idempotency migration', () => {
+    expect(migrations.at(-2)).toBe(AddHomeCopy1761200000000);
+    expect(migrations.at(-3)?.name).toBe('AddAvatarIdempotency1761100000000');
   });
 
   it('creates home_copy with its unique key per destination, tier, locale and angle', async () => {
