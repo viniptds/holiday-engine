@@ -8,3 +8,7 @@ dist
 
 # test lock (scripts/run-tests.mjs)
 .test-lock/
+
+# production deploy
+.env.production
+/backups/
