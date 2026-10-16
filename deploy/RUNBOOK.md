@@ -1,5 +1,7 @@
 # Engine deployment runbook
 
+This is the plain-Compose guide. The primary path is Coolify: [`COOLIFY.md`](COOLIFY.md).
+
 Stack: Cloudflare (DNS, proxy, WAF) -> Cloudflare Tunnel -> one Linux server running `docker-compose.prod.yml`
 (postgres, redis, engine, cloudflared; no published ports). One engine replica only.
 
@@ -28,30 +30,27 @@ All commands run on the server, from the repo checkout (`holiday-engine/`), as t
 
 ## 2. Cloudflare
 
-1. Add the `holid.ai` zone to Cloudflare (Free plan) and switch the registrar's nameservers.
+1. Add the `waygex.com` zone to Cloudflare (Free plan) and switch the registrar's nameservers.
 2. SSL/TLS: mode Full (strict); Edge Certificates: Always Use HTTPS on, Minimum TLS Version 1.2.
 3. Security > Bots: Bot Fight Mode OFF. On the Free plan it cannot be skipped per path and would challenge the
    app's API calls and the RevenueCat webhook.
 4. Zero Trust > Networks > Tunnels > Create tunnel (Cloudflared). Copy the token into `TUNNEL_TOKEN` in
-   `.env.production`. Add the public hostname `api.holid.ai`, service type HTTP, URL `engine:3000`
-   (that is `http://engine:3000`). Then `docker compose -f docker-compose.prod.yml --env-file .env.production up -d cloudflared`
+   `.env.production`. Add the public hostname `holidai.waygex.com` with path `app/v1`, service type HTTP, URL `engine:3000`
+   (that is `http://engine:3000`). Only `/app/v1/*` is routed to the engine; check the path field in the UI. Then `docker compose -f docker-compose.prod.yml --env-file .env.production up -d cloudflared`
    (or run `./deploy/deploy.sh`).
 
 ## 3. WAF custom rules and rate limiting
 
-Security > WAF > Custom rules (the Free plan allows 5). Action Block for both. Use "Edit expression".
+Security > WAF > Custom rules (the Free plan allows 5). Action Block. Use "Edit expression".
 
-Rule 1, block everything on the API host except the health check and the app API (this also blocks the
-unauthenticated bot ingress `POST /post-message`):
+Rule 1 (the old "block everything except the health check and `/app/v1/`") is no longer needed: the host
+`holidai.waygex.com` is path-split and only `/app/v1/` is routed to the engine. `POST /post-message` and the engine's
+`GET /` are therefore not reachable from the internet (on the Coolify path they hit the web app and return 404).
 
-```
-(http.host eq "api.holid.ai" and http.request.uri.path ne "/" and not starts_with(http.request.uri.path, "/app/v1/"))
-```
-
-Rule 2, defense in depth for the dev-only endpoints (they are also off in production):
+Rule 1, defense in depth for the dev-only endpoints (they are also off in production):
 
 ```
-(http.host eq "api.holid.ai" and (http.request.uri.path eq "/app/v1/auth/dev" or http.request.uri.path eq "/app/v1/subscription/dev-grant"))
+(http.host eq "holidai.waygex.com" and (http.request.uri.path eq "/app/v1/auth/dev" or http.request.uri.path eq "/app/v1/subscription/dev-grant"))
 ```
 
 Security > WAF > Rate limiting rules (Free: 1 rule). Per IP, period 10 s, action Block for 10 s, characteristic
@@ -63,13 +62,14 @@ starts_with(http.request.uri.path, "/app/v1/auth/")
 ```
 
 Public, unauthenticated engine paths that stay reachable (everything else under `/app/v1/` needs a bearer token):
-- `GET /` (health check, `{"status":"ok"}`)
+- `GET /` (health check, `{"status":"ok"}`; internal only, not routed from the internet)
 - `POST /app/v1/auth/google`, `/auth/refresh`, `/auth/logout` (the dev login does not exist in production)
 - `POST /app/v1/billing/revenuecat-webhook` (authenticated by the `REVENUECAT_WEBHOOK_AUTH` header)
 - `/app/v1/email/unsubscribe` (link from emails)
 
 The local-storage `/app/v1/files/:token` route is not served in production (S3 driver only). Test the rules with
-`curl -i https://api.holid.ai/post-message -X POST` (expect 403) and `curl -i https://api.holid.ai/` (expect 200).
+`curl -i https://holidai.waygex.com/post-message -X POST` (expect 404 or 403, never an engine response) and
+`curl -i https://holidai.waygex.com/app/v1/me` (expect 401 JSON).
 
 ## 4. Cloudflare R2
 
